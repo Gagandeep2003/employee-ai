@@ -1,0 +1,140 @@
+{
+  "project_context": {
+    "name": "AI Employee SaaS",
+    "theme": "hybrid_theme",
+    "theme_preference": "marketing_light_dashboard_dark",
+    "emotional_tone": "Trustworthy, Service-Oriented, High-end Concierge, Authoritative (Not Synthetic AI)"
+  },
+  "typography": {
+    "heading_font": "Cabinet Grotesk",
+    "body_font": "Outfit",
+    "mono_font": "JetBrains Mono",
+    "rules": {
+      "headings": "MUST use tight letter spacing (tracking-tight). Never center by default. Use font-light or font-black to create visual tension.",
+      "body": "Loose leading (leading-relaxed) for readability. Use text-base for standard, text-sm for dashboard density.",
+      "overlines": "Uppercase, tiny text-xs, tracking-[0.2em] for labels and super-headers.",
+      "hierarchy": "H1 max text-5xl to text-6xl. Do not exceed these limits. Maintain hierarchy gap rule (max 2 Tailwind steps between H and sub-H)."
+    },
+    "forbidden_fonts": ["Inter", "Roboto", "Open Sans", "Lato", "Space Grotesk"]
+  },
+  "colors": {
+    "archetype": "Organic & Earthy + Swiss Brutalist hybrid",
+    "light_theme": {
+      "background": "#F7F7F5",
+      "foreground": "#0A0A0A",
+      "primary": "#1E3F33",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#E8E8E3",
+      "secondary_foreground": "#1E3F33",
+      "accent": "#C4A47C",
+      "border": "#DCDCD7",
+      "card": "#FFFFFF",
+      "muted": "#F0F0EC",
+      "muted_foreground": "#5C5C5C"
+    },
+    "dark_theme": {
+      "background": "#0D0E0E",
+      "foreground": "#F2F2F2",
+      "primary": "#2D5C4A",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#1A1B1B",
+      "secondary_foreground": "#F2F2F2",
+      "accent": "#C4A47C",
+      "border": "#242525",
+      "card": "#131414",
+      "muted": "#1F2020",
+      "muted_foreground": "#A1A1A1"
+    },
+    "rules": {
+      "gradients": "NO full-screen gradients. Use solid colors with noise/texture instead.",
+      "contrast": "Always tint neutral greys with a slight warm (orange) or cool (blue) undertone. Ensure WCAG AA contrast (4.5:1)."
+    },
+    "forbidden_colors": ["#7351B7", "#1B93A4"]
+  },
+  "visual_enhancers": {
+    "surfaces": "Mix 'Crystal Glassmorphism' (bg-white/70 backdrop-blur-xl border-white/40) for floating chat widgets and sticky navs, with 'Flat Solid' surfaces for dashboard cards.",
+    "borders": "1px solid strokes (border-border). Max border-radius is 8px (rounded-md) to maintain a sharp, authoritative B2B look.",
+    "shadows": "Ambient diffuse shadows (shadow-sm) only. Do NOT use deep, heavy shadows.",
+    "textures": "Apply subtle grain/noise overlays to large empty background sections to kill digital flatness."
+  },
+  "component_patterns": {
+    "marketing_page": {
+      "hero": "Agent-Native Showcase: Show the AI widget actively solving a business query in the hero. Use the Modern Reception Desk image with bg-black/40 overlay.",
+      "features": "Bento Grid Protocol: Mode A (Tetris grid, asymmetrical).",
+      "marquee": "Editorial Ribbon: Slow, smooth drift of customer categories using react-fast-marquee."
+    },
+    "dashboard": {
+      "layout": "F-Pattern Layout. North Star Metric (e.g., Knowledge Score) in top-left. Left-sidebar navigation.",
+      "cards": "Dense, sharp edges, 1px subtle border. No generic drop shadows.",
+      "charts": "Shadcn Recharts customized. Line for trends (conversations), Bar for comparisons. Never show empty states; use CTAs."
+    },
+    "chat_widget": {
+      "ui": "Floating pill-shaped button. The chat window uses Glassmorphism with sharp inner contrasts, explicit 'Human Handoff' button, and real-time streaming typography."
+    }
+  },
+  "grids": {
+    "marketing": "grid-cols-1 md:grid-cols-8 lg:grid-cols-12 with wide gap-8 to gap-12. Leave intentional empty cells.",
+    "dashboard": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with tight gap-4. Every pixel utilized, h-full on children."
+  },
+  "layouts": {
+    "spacing": "Generous Spacing (Tailwind p-12 to p-24) for marketing sections. Internal container padding (p-6) must exist if borders are present.",
+    "alignment": "Mobile-first. Optical alignment (adjust padding manually to balance icons). Grid items MUST be direct children."
+  },
+  "motion": {
+    "interactions": "Hover states must explicitly change text color (e.g., hover:bg-primary hover:text-white). Focus states require ring-2 with higher contrast.",
+    "transitions": "Use specific properties (transition-transform duration-200 ease-out). NO 'transition: all'.",
+    "micro_animations": "Chat widget bounce, accordion smooth expand, slight card lift (-translate-y-1) on dashboard hover."
+  },
+  "accessibility": {
+    "contrast": "Text over images needs text-shadow or gradient overlay.",
+    "focus": "Elements must be keyboard navigable with clear focus indicators.",
+    "testing": "All interactive elements MUST have role-based data-testid attributes (e.g., data-testid='login-submit-button')."
+  },
+  "media": {
+    "icons": "Use @phosphor-icons/react for premium, duotone aesthetic. No AI emojis (🤖🧠).",
+    "images": "Use realistic, context-specific images. No placeholders. Max mobile height 80vh."
+  },
+  "image_urls": [
+    {
+      "category": "Marketing Hero Background",
+      "url": "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjByZWNlcHRpb25pc3QlMjBkZXNrfGVufDB8fHx8MTc4NDI4MjUzNnww&ixlib=rb-4.1.0&q=85",
+      "description": "Hotel reception desk with modern wooden furniture."
+    },
+    {
+      "category": "Testimonial - Coffee Shop Owner",
+      "url": "https://images.unsplash.com/photo-1753351052363-53ce102830eb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwzfHxidXNpbmVzcyUyMG93bmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzg0MjgyNTM2fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Smiling woman in coffee shop."
+    },
+    {
+      "category": "Testimonial - Restaurant Owner",
+      "url": "https://images.unsplash.com/photo-1717251816735-62bd01da1757?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHw0fHxidXNpbmVzcyUyMG93bmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzg0MjgyNTM2fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Woman in kitchen setting."
+    },
+    {
+      "category": "Testimonial - Local Shop Owner",
+      "url": "https://images.unsplash.com/photo-1484863137850-59afcfe05386?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMG93bmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzg0MjgyNTM2fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Woman at wooden table."
+    }
+  ],
+  "3d_libraries": {
+    "recommendation": "Maintain 2D layered depth with framer-motion for UI interactions. Use react-fast-marquee for logos.",
+    "commands": [
+      "yarn add framer-motion",
+      "yarn add react-fast-marquee",
+      "yarn add @phosphor-icons/react"
+    ]
+  },
+  "instructions_to_main_agent": "1. Update tailwind.config.js with the provided light/dark colors and font families. 2. Build the Landing Page and Widget Customizer using .js/.jsx (no TSX). 3. Use Shadcn components for forms, inputs, selects, and dialogs. 4. Never use 'transparent' background for navbars if content scrolls under it; use glassmorphism. 5. Integrate sonner for toasts.",
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Do not use dark colors as gradients. Use solid colors.",
+    "Do not center-align the app container (.App { text-align: center; } is FORBIDDEN).",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) combined with a 1px border.",
+    "You MUST NOT apply universal transition (e.g., transition: all). Add specific transitions.",
+    "Always use modern button styles (pill-shaped or sharp) with clear hover and active interactions.",
+    "NEVER use AI assistant Emoji characters (🤖🧠💭💡🔮🎯).",
+    "Every interaction needs micro-animations (hover, entrance).",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Ensure Javascript/JSX files (.js/.jsx) are used instead of TypeScript (.tsx)."
+  ]
+}

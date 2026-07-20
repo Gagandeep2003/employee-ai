@@ -1,0 +1,10 @@
+# Dev/test-only dependencies -- NOT installed in production.
+# pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+
+pytest>=8.3,<9.0
+pytest-asyncio>=0.24,<1.0
+httpx>=0.27,<1.0        # ASGI test client for FastAPI's TestClient
+mongomock-motor>=0.0.34 # in-memory Mongo for tests, no real DB needed
+
+ruff>=0.7,<1.0          # lint (replaces black+flake8+isort with one fast tool)

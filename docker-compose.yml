@@ -1,0 +1,45 @@
+version: "3.8"
+
+# Lowest-cost self-host setup: one small VPS (e.g. a $6/mo droplet/instance) running
+# all three services. For anything beyond a handful of businesses, swap `mongo` for
+# a managed MongoDB Atlas free/shared tier instead (just point MONGO_URL at it and
+# remove the mongo service below) -- easier backups, no disk-management on you.
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"   # not exposed publicly
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+    depends_on:
+      - mongo
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads   # only used when S3 storage isn't configured
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8000}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  backend_uploads:
