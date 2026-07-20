@@ -93,8 +93,8 @@
     "eslint-plugin-react-hooks": "5.2.0",
     "globals": "15.15.0",
     "postcss": "8.5.10",
-    "tailwindcss": "3.4.17"
-    "react-is": "18.3.1",
+    "tailwindcss": "3.4.17",
+    "react-is": "18.3.1"
   },
   "resolutions": {
     "react-router": "7.15.0",
