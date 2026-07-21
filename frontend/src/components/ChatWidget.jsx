@@ -34,6 +34,15 @@ export default function ChatWidget({ businessId, config }) {
   const showBranding = config?.widget?.show_branding !== false;
   const teaserKey = useMemo(() => `ai_employee_teaser_${businessId}`, [businessId]);
 
+  // Widget corner is driven entirely by config -- never hardcoded. Anything
+  // other than an explicit "bottom-left" falls back to "bottom-right" so old
+  // configs (or a missing value) keep the previous default behavior.
+  const position = config?.widget?.position === "bottom-left" ? "bottom-left" : "bottom-right";
+  const isBottomLeft = position === "bottom-left";
+  const cornerClasses = isBottomLeft ? "left-4 items-start" : "right-4 items-end";
+  const teaserTailClass = isBottomLeft ? "rounded-bl-sm" : "rounded-br-sm";
+  const teaserCloseClass = isBottomLeft ? "-left-2" : "-right-2";
+
   useEffect(() => {
     if (messages.length === 0) setMessages([{ role: "assistant", text: welcome }]);
   }, [welcome]);
@@ -75,6 +84,14 @@ export default function ChatWidget({ businessId, config }) {
     else if (teaser) reportSize(300, 170);
     else reportSize(96, 96);
   }, [open, teaser]);
+
+  // The embedding page (embed.js) also needs to know which side to anchor the
+  // iframe on -- that's a fact about the saved config, not something embed.js
+  // can know on its own, so we hand it over the same way we hand over size.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.parent === window) return;
+    window.parent.postMessage({ source: "ai-employee-widget", type: "position", position }, "*");
+  }, [position]);
 
   const dismissTeaser = () => {
     setTeaser(null);
@@ -128,17 +145,17 @@ export default function ChatWidget({ businessId, config }) {
 
   return (
     <div className="fixed inset-0 pointer-events-none">
-      <div className="absolute bottom-4 right-4 pointer-events-auto flex flex-col items-end gap-3">
+      <div className={`absolute bottom-4 ${cornerClasses} pointer-events-auto flex flex-col gap-3`}>
         {!open && teaser && (
           <div
-            className="max-w-[240px] rounded-2xl rounded-br-sm shadow-lg border bg-white px-3.5 py-2.5 text-sm text-gray-800 relative animate-in fade-in slide-in-from-bottom-2"
+            className={`max-w-[240px] rounded-2xl ${teaserTailClass} shadow-lg border bg-white px-3.5 py-2.5 text-sm text-gray-800 relative animate-in fade-in slide-in-from-bottom-2`}
             style={{ borderColor: "rgba(0,0,0,0.08)" }}
             data-testid="widget-teaser"
           >
             <button
               onClick={dismissTeaser}
               aria-label="Dismiss"
-              className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600"
+              className={`absolute -top-2 ${teaserCloseClass} w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600`}
             >
               <X size={11} weight="bold" />
             </button>
