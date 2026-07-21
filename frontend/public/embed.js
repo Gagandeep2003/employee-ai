@@ -7,25 +7,22 @@
  *   <script src="https://yourapp.com/embed.js" data-business="biz_xxx" async></script>
  *
  * This creates a small floating <iframe> pointing at the widget route
- * (ChatWidget.jsx, served by the React app) and resizes it in response to
- * postMessage size reports from that iframe -- so it only ever covers the
- * bubble/chat window itself, never the whole page, and the rest of the host
- * site stays fully clickable.
+ * (ChatWidget.jsx, served by the React app) and resizes/repositions it in
+ * response to postMessage reports from that iframe -- so it only ever covers
+ * the bubble/chat window itself, never the whole page, and the rest of the
+ * host site stays fully clickable.
  */
 (function () {
   "use strict";
-
   var scriptEl = document.currentScript || (function () {
     var scripts = document.getElementsByTagName("script");
     return scripts[scripts.length - 1];
   })();
-
   var businessId = scriptEl.getAttribute("data-business");
   if (!businessId) {
     console.error("[AI Employee] Missing data-business attribute on the embed <script> tag.");
     return;
   }
-
   // Defaults to the origin this script was loaded from, so a single build works
   // for every customer without hardcoding a domain. Override with data-origin
   // if you're serving embed.js from a CDN separate from the app itself.
@@ -35,7 +32,12 @@
     var m = src.match(/^(https?:\/\/[^/]+)/);
     origin = m ? m[1] : window.location.origin;
   }
-  var position = scriptEl.getAttribute("data-position") || "bottom-right";
+  // This is only a pre-load guess so there's no flash on the wrong side before
+  // the iframe finishes loading. The real value is config.widget.position,
+  // reported by the page itself via postMessage once it knows it (see below)
+  // -- that's the actual source of truth, so this self-corrects even if this
+  // attribute is missing or out of date.
+  var initialPosition = scriptEl.getAttribute("data-position") || "bottom-right";
 
   var iframe = document.createElement("iframe");
   iframe.src = origin + "/widget/" + encodeURIComponent(businessId);
@@ -43,7 +45,6 @@
   iframe.setAttribute("aria-label", "Chat widget");
   iframe.style.position = "fixed";
   iframe.style.bottom = "0";
-  iframe.style[position.indexOf("left") !== -1 ? "left" : "right"] = "0";
   iframe.style.width = "96px";
   iframe.style.height = "96px";
   iframe.style.border = "none";
@@ -52,6 +53,7 @@
   iframe.style.colorScheme = "light";
   iframe.style.transition = "width 0.15s ease, height 0.15s ease";
   iframe.allow = "clipboard-write";
+  applyPosition(initialPosition);
 
   document.addEventListener("DOMContentLoaded", mount);
   if (document.readyState === "complete" || document.readyState === "interactive") mount();
@@ -59,6 +61,16 @@
   function mount() {
     if (document.body && !document.body.contains(iframe)) {
       document.body.appendChild(iframe);
+    }
+  }
+
+  function applyPosition(position) {
+    if (position === "bottom-left") {
+      iframe.style.right = "";
+      iframe.style.left = "0";
+    } else {
+      iframe.style.left = "";
+      iframe.style.right = "0";
     }
   }
 
@@ -70,6 +82,8 @@
       var h = Math.max(1, Math.min(800, event.data.height | 0));
       iframe.style.width = w + "px";
       iframe.style.height = h + "px";
+    } else if (event.data.type === "position") {
+      applyPosition(event.data.position === "bottom-left" ? "bottom-left" : "bottom-right");
     }
   });
 })();
