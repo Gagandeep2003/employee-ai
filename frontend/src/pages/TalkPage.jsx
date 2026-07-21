@@ -10,15 +10,39 @@ import ChatWidget from "../components/ChatWidget";
 export default function TalkPage() {
   const { businessId } = useParams();
   const [config, setConfig] = useState(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    api.get(`/chat/business/${businessId}/widget-config`).then(({ data }) => setConfig(data)).catch(() => {});
+    let cancelled = false;
+    api.get(`/chat/business/${businessId}/widget-config`)
+      .then(({ data }) => { if (!cancelled) setConfig(data); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
   }, [businessId]);
+
+  if (error) {
+    // Previously a failed fetch here just left the page stuck on "Loading…"
+    // forever with no explanation. If you're seeing THIS message instead of
+    // your actual site, the fetch reached the app but failed -- check that
+    // the business id in the URL is correct and hasn't been deleted. If
+    // instead you're seeing your hosting platform's own 404/error page (not
+    // this one), that's a separate, more common issue: see the note about
+    // SPA rewrite rules below.
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-white bg-[#0d1a15] p-6 text-center gap-2">
+        <div className="font-display text-2xl">This page isn't available right now.</div>
+        <div className="text-sm opacity-70 max-w-sm">
+          The link may be out of date, or the business behind it may no longer exist. If you're the
+          business owner, check the link in your Widget settings.
+        </div>
+      </div>
+    );
+  }
 
   if (!config) return <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Loading…</div>;
 
-  const primary = config.widget.primary_color;
-  const accent = config.widget.accent_color;
+  const primary = config.widget?.primary_color || "#1E3F33";
+  const accent = config.widget?.accent_color || "#C4A47C";
 
   return (
     <div className="min-h-screen relative" style={{ background: `linear-gradient(180deg, ${primary} 0%, #0d1a15 100%)` }}>
