@@ -45,6 +45,18 @@ class Business(BaseModel):
     monthly_limit: int = 100
     monthly_used: int = 0
     usage_period: str = ""  # "YYYY-MM" -- monthly_used rolls over when this no longer matches the current month (see usage.py)
+    overage_count: int = 0  # chats past monthly_limit this period, billed at next renewal if overage_billing_enabled
+    # GST -- optional; if unset, invoices default to IGST (conservative) and omit a buyer GSTIN.
+    gst_state_code: Optional[str] = None  # 2-digit GST state code, see gst.py
+    gstin: Optional[str] = None
+    billing_legal_name: Optional[str] = None
+    billing_address: Optional[str] = None
+    # Subscription lifecycle -- see routers/billing.py and scheduler.py's billing_lifecycle_job
+    subscription_status: str = "active"  # active | past_due | canceled
+    current_period_end: Optional[str] = None  # ISO date; None on the free plan
+    grace_period_ends_at: Optional[str] = None
+    cancel_at_period_end: bool = False
+    pending_plan_change: Optional[str] = None  # a downgrade scheduled to take effect at period end
     ai_snapshot: Optional[str] = None  # AI-generated overview of the business, shown during onboarding review
     ai_snapshot_generated_at: Optional[str] = None
     appointment_settings: Dict[str, Any] = Field(default_factory=lambda: {
@@ -113,15 +125,33 @@ class PaymentOrder(BaseModel):
 
 
 class Invoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: f"inv_{uuid.uuid4().hex[:10]}")
+    invoice_number: str  # GST-compliant sequential number, e.g. "INV-2025-26-000001" -- see invoicing.py
+    document_type: str = "tax_invoice"  # tax_invoice | credit_note
     business_id: str
     user_id: str
     plan: str
-    amount_inr: int
-    status: str = "paid"  # paid | refunded
+    description: Optional[str] = None
+    status: str = "paid"  # paid | refunded | partially_refunded
     provider: str = "razorpay"
     razorpay_order_id: Optional[str] = None
     razorpay_payment_id: Optional[str] = None
+    refund_amount_paise: int = 0
+    refunded_at: Optional[str] = None
+    hsn_sac_code: str = "998314"
+    taxable_value_paise: int = 0
+    gst_rate: float = 18.0
+    cgst_paise: int = 0
+    sgst_paise: int = 0
+    igst_paise: int = 0
+    total_tax_paise: int = 0
+    total_paise: int = 0
+    is_intra_state: bool = True
+    seller_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    buyer_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    amount_inr: int = 0  # total_paise/100, kept for older UI code that reads this field directly
+    pdf_path: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
 
 

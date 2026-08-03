@@ -4,7 +4,7 @@ import { useAuth } from "../lib/auth";
 import { api, setAuthToken } from "../lib/api";
 import {
   ChartLineUp, Buildings, UsersThree, Receipt, Robot, Chats, BookOpen, Globe, Handshake,
-  Tag, Ticket, Broadcast, Flag, Pulse, ClipboardText, GearSix, SignOut, ArrowSquareOut
+  Tag, Ticket, Broadcast, Flag, Pulse, ClipboardText, GearSix, SignOut, ArrowSquareOut, Scroll
 } from "@phosphor-icons/react";
 
 const LINKS = [
@@ -23,6 +23,7 @@ const LINKS = [
   { to: "/admin/flags", label: "Feature Flags", Icon: Flag },
   { to: "/admin/system", label: "System", Icon: Pulse },
   { to: "/admin/audit", label: "Audit Log", Icon: ClipboardText },
+  { to: "/admin/legal", label: "Legal", Icon: Scroll },
   { to: "/admin/settings", label: "Settings", Icon: GearSix },
 ];
 

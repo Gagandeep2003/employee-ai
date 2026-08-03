@@ -52,12 +52,14 @@ def test_quick_facts_injected_into_chat_prompt(signed_up_owner, monkeypatch):
     captured = {}
 
     async def fake_rag_answer(business_name, business_context, history, question, **kw):
+        captured["business_context"] = business_context
         captured.update(kw)
         return "ok"
     monkeypatch.setattr(chat_router, "rag_answer", fake_rag_answer)
 
     client.post("/api/chat", json={"business_id": biz["business_id"], "message": "what are your hours"})
-    assert "midnight" in captured.get("live_info", "")
+    assert "midnight" in captured.get("business_context", "")
+    assert "TIER 1" in captured.get("business_context", "")  # owner-confirmed facts must outrank retrieved knowledge
 
 
 def test_inventory_csv_upload_and_list(signed_up_owner):

@@ -106,7 +106,7 @@ export default function Login() {
               <p className="text-sm text-muted-foreground mt-2">Enter the 6-digit code from your authenticator app.</p>
               <form onSubmit={submitMfa} className="mt-8 space-y-4">
                 <input
-                  data-testid="mfa-code" required autoFocus inputMode="numeric" maxLength={6}
+                  data-testid="mfa-code" aria-label="Six-digit authenticator code" required autoFocus inputMode="numeric" maxLength={6}
                   value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
                   placeholder="123456"
                   className="w-full px-3 py-2.5 rounded-md border border-border bg-card outline-none focus:ring-2 focus:ring-primary text-center tracking-[0.4em] text-lg"

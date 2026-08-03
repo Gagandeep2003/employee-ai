@@ -50,15 +50,36 @@ def _match(doc, query):
     return True
 
 
+def _set_nested(doc, dotted_key, value):
+    parts = dotted_key.split(".")
+    cur = doc
+    for p in parts[:-1]:
+        if not isinstance(cur.get(p), dict):
+            cur[p] = {}
+        cur = cur[p]
+    cur[parts[-1]] = value
+
+
+def _unset_nested(doc, dotted_key):
+    parts = dotted_key.split(".")
+    cur = doc
+    for p in parts[:-1]:
+        if not isinstance(cur.get(p), dict):
+            return
+        cur = cur[p]
+    cur.pop(parts[-1], None)
+
+
 def _apply_update(doc, update):
     if "$set" in update:
-        doc.update(update["$set"])
+        for k, v in update["$set"].items():
+            _set_nested(doc, k, v) if "." in k else doc.update({k: v})
     if "$inc" in update:
         for k, v in update["$inc"].items():
             doc[k] = doc.get(k, 0) + v
     if "$unset" in update:
         for k in update["$unset"]:
-            doc.pop(k, None)
+            _unset_nested(doc, k) if "." in k else doc.pop(k, None)
 
 
 class FakeCursor:
@@ -144,6 +165,22 @@ class FakeCollection:
             self.docs.append(new_doc)
             return types.SimpleNamespace(modified_count=0, matched_count=0, upserted_id=1)
         return types.SimpleNamespace(modified_count=0, matched_count=0)
+
+    async def find_one_and_update(self, query, update, upsert=False, return_document=False):
+        """return_document: True (i.e. pymongo.ReturnDocument.AFTER) returns the post-update
+        doc; False (.BEFORE, the default) returns the pre-update doc, or None if it didn't
+        exist. Real Motor's equivalent is atomic; single-threaded FakeDB is trivially so."""
+        for d in self.docs:
+            if _match(d, query):
+                before = copy.deepcopy(d)
+                _apply_update(d, update)
+                return d if return_document else before
+        if not upsert:
+            return None
+        new_doc = {k: v for k, v in query.items() if not k.startswith("$")}
+        _apply_update(new_doc, update)
+        self.docs.append(new_doc)
+        return new_doc if return_document else None
 
     async def update_many(self, query, update):
         count = 0

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Marquee from "react-fast-marquee";
 import { ArrowUpRight, Sparkle, ShieldCheck, LightbulbFilament, Storefront, ChatCircleText, Buildings } from "@phosphor-icons/react";
+import EnterpriseInquiryDialog from "../components/EnterpriseInquiryDialog";
 
 const HERO_IMG = "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjByZWNlcHRpb25pc3QlMjBkZXNrfGVufDB8fHx8MTc4NDI4MjUzNnww&ixlib=rb-4.1.0&q=85";
 
@@ -16,6 +17,7 @@ export default function Landing() {
   const [params] = useSearchParams();
   const ref = params.get("ref");
   React.useEffect(() => { if (ref) localStorage.setItem("pending_referral", ref); }, [ref]);
+  const [showEnterprise, setShowEnterprise] = useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -166,13 +168,15 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-xs uppercase tracking-[0.3em] text-accent mb-4">Pricing</div>
           <h2 className="font-display text-4xl md:text-5xl">Start free. Upgrade when it earns its keep.</h2>
-          <div className="mt-14 grid md:grid-cols-3 gap-6">
+          <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { k: "free", n: "Free", p: 0, feat: ["100 chats / month", "AI Employee branding", "1 business"] },
-              { k: "starter", n: "Starter", p: 999, feat: ["2,000 chats / month", "No branding", "Widget customization", "Email support"], hi: true },
-              { k: "pro", n: "Pro", p: 2999, feat: ["10,000 chats / month", "Advanced analytics", "Priority support", "Unlimited uploads"] },
+              { k: "starter", n: "Starter", p: 999, feat: ["2,000 chats / month", "No branding", "Widget customization", "Email support"] },
+              { k: "growth", n: "Growth", p: 2999, feat: ["10,000 chats / month", "Advanced analytics", "Priority support", "Unlimited uploads"], hi: true },
+              { k: "scale", n: "Scale", p: 4999, feat: ["25,000 chats / month", "Everything in Growth", "Higher-volume priority support"] },
             ].map((p) => (
               <div key={p.k} className={`rounded-lg p-8 ${p.hi ? "bg-accent text-accent-foreground border-2 border-accent" : "bg-primary-foreground/5 border border-primary-foreground/20"}`}>
+                {p.hi && <div className="text-[11px] uppercase tracking-[0.2em] mb-2 opacity-80">Most popular</div>}
                 <div className="font-display text-2xl">{p.n}</div>
                 <div className="mt-4 font-display text-5xl">₹{p.p}<span className="text-base font-normal opacity-70">/mo</span></div>
                 <ul className="mt-6 space-y-2 text-sm">
@@ -182,9 +186,21 @@ export default function Landing() {
               </div>
             ))}
           </div>
+          <div className="mt-6 rounded-lg p-8 bg-primary-foreground/5 border border-primary-foreground/20 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <div className="font-display text-2xl">Enterprise</div>
+              <div className="text-sm opacity-70 mt-1 max-w-xl">Custom pricing for high-volume or multi-location businesses — unlimited conversations under a fair usage policy, dedicated support, and a contract that fits how you operate.</div>
+            </div>
+            <button onClick={() => setShowEnterprise(true)} data-testid="pricing-cta-enterprise"
+              className="shrink-0 px-6 py-3 rounded-md bg-primary-foreground text-primary hover:bg-accent hover:text-accent-foreground transition-colors">
+              Contact us
+            </button>
+          </div>
           <p className="mt-8 text-sm opacity-70">Refer a business → get 25% off for 12 months when they subscribe.</p>
         </div>
       </section>
+
+      <EnterpriseInquiryDialog open={showEnterprise} onOpenChange={setShowEnterprise} />
 
       {/* CTA */}
       <section className="max-w-7xl mx-auto px-6 py-24 text-center">

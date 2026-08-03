@@ -48,12 +48,8 @@ async def _ensure_admin(user: dict):
 @router.post("/mfa/setup")
 async def mfa_setup(user=Depends(get_current_user)):
     await _ensure_admin(user)
-    from auth import generate_mfa_secret, mfa_provisioning_uri
-    secret = generate_mfa_secret()
-    # Stored but NOT enabled until /mfa/enable confirms a valid code -- otherwise
-    # a network hiccup mid-setup could silently brick the account's login.
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"mfa_secret": secret, "mfa_enabled": False}})
-    return {"secret": secret, "provisioning_uri": mfa_provisioning_uri(secret, user["email"])}
+    from auth import mfa_setup_for
+    return await mfa_setup_for(user["user_id"], user["email"])
 
 
 class MfaEnableIn(BaseModel):
@@ -63,13 +59,8 @@ class MfaEnableIn(BaseModel):
 @router.post("/mfa/enable")
 async def mfa_enable(payload: MfaEnableIn, request: Request, user=Depends(get_current_user)):
     await _ensure_admin(user)
-    from auth import verify_totp_code
-    full = await db.users.find_one({"user_id": user["user_id"]})
-    if not full or not full.get("mfa_secret"):
-        raise HTTPException(400, "Call /mfa/setup first")
-    if not verify_totp_code(full["mfa_secret"], payload.code):
-        raise HTTPException(401, "Incorrect code -- check your authenticator app and try again")
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"mfa_enabled": True}})
+    from auth import mfa_enable_for
+    await mfa_enable_for(user["user_id"], payload.code)
     await audit_log(request, user["user_id"], "admin.mfa_enabled", "user", user["user_id"], {})
     return {"ok": True}
 
@@ -81,11 +72,8 @@ class MfaDisableIn(BaseModel):
 @router.post("/mfa/disable")
 async def mfa_disable(payload: MfaDisableIn, request: Request, user=Depends(get_current_user)):
     await _ensure_admin(user)
-    from auth import verify_password
-    full = await db.users.find_one({"user_id": user["user_id"]})
-    if not full or not verify_password(payload.password, full.get("password_hash", "")):
-        raise HTTPException(401, "Incorrect password")
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"mfa_enabled": False, "mfa_secret": None}})
+    from auth import mfa_disable_for
+    await mfa_disable_for(user["user_id"], payload.password)
     await audit_log(request, user["user_id"], "admin.mfa_disabled", "user", user["user_id"], {})
     return {"ok": True}
 
@@ -101,7 +89,7 @@ async def overview(request: Request, user=Depends(get_current_user)):
     users_owners = await db.users.count_documents({"role": "owner"})
     businesses_total = await db.businesses.count_documents({})
     biz_free = await db.businesses.count_documents({"plan": "free"})
-    biz_paid = await db.businesses.count_documents({"plan": {"$in": ["starter", "pro"]}})
+    biz_paid = await db.businesses.count_documents({"plan": {"$ne": "free"}})
     biz_suspended = await db.businesses.count_documents({"status": "suspended"})
 
     conversations = await db.conversations.count_documents({})
@@ -119,7 +107,7 @@ async def overview(request: Request, user=Depends(get_current_user)):
 
     # MRR = sum of monthly plan prices for active paid businesses
     mrr = 0
-    async for b in db.businesses.find({"plan": {"$in": ["starter", "pro"]}, "status": {"$ne": "suspended"}}, {"plan": 1, "_id": 0}):
+    async for b in db.businesses.find({"plan": {"$ne": "free"}, "status": {"$ne": "suspended"}}, {"plan": 1, "_id": 0}):
         mrr += PLANS.get(b["plan"], {}).get("price_inr", 0)
     arr = mrr * 12
 
@@ -149,6 +137,95 @@ async def overview(request: Request, user=Depends(get_current_user)):
     }
 
 
+@router.get("/growth")
+async def growth(months: int = 6, format: Optional[str] = None, user=Depends(get_current_user)):
+    """New signups and new paid conversions per month, plus month-over-month growth %."""
+    await _ensure_admin(user)
+    months = max(1, min(months, 24))
+    now = datetime.now(timezone.utc)
+    rows = []
+    for i in range(months - 1, -1, -1):
+        # compute the i-th month back from the current month, robust to month-length differences
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        start = datetime(year, month, 1, tzinfo=timezone.utc)
+        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc) if month == 12 else datetime(year, month + 1, 1, tzinfo=timezone.utc)
+        new_signups = await db.businesses.count_documents({"created_at": {"$gte": start.isoformat(), "$lt": end.isoformat()}})
+        new_invoices = await db.invoices.find(
+            {"status": "paid", "document_type": {"$ne": "credit_note"},
+             "created_at": {"$gte": start.isoformat(), "$lt": end.isoformat()}},
+            {"_id": 0, "business_id": 1},
+        ).to_list(2000)
+        new_paying_businesses = len({inv["business_id"] for inv in new_invoices})
+        rows.append({"month": start.strftime("%Y-%m"), "new_signups": new_signups, "new_paying_businesses": new_paying_businesses})
+
+    for idx, row in enumerate(rows):
+        prev = rows[idx - 1]["new_signups"] if idx > 0 else None
+        row["signup_growth_pct"] = round((row["new_signups"] - prev) / prev * 100, 1) if prev else None
+
+    if format:
+        from exports import export_response
+        columns = [("month", "Month"), ("new_signups", "New Signups"),
+                  ("new_paying_businesses", "New Paying Businesses"), ("signup_growth_pct", "MoM Growth %")]
+        return export_response(format, rows, columns, "growth", "Growth Report")
+    return rows
+
+
+@router.get("/churn")
+async def churn(months: int = 6, format: Optional[str] = None, user=Depends(get_current_user)):
+    """Monthly churn rate: businesses that canceled a paid plan during the month, divided by
+    businesses that were actually on a paid plan at the start of it.
+
+    That denominator comes from plan_snapshots when a snapshot exists for the month (see
+    scheduler.plan_snapshot_job, taken on the 1st of each month) -- an exact paying-cohort
+    count, not an estimate. For months before this snapshot existed, there's no way to
+    reconstruct historical plan state after the fact, so those rows fall back to the old
+    approximation (total signups before that date, which overcounts the denominator since it
+    includes businesses that were never on a paid plan). Each row says which method it used
+    in denominator_source so this doesn't quietly look more precise than it is; the trend
+    across months is meaningful either way, but only snapshot-backed rows are exact."""
+    await _ensure_admin(user)
+    months = max(1, min(months, 24))
+    now = datetime.now(timezone.utc)
+    month_starts = []
+    for i in range(months - 1, -1, -1):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        month_starts.append(datetime(year, month, 1, tzinfo=timezone.utc))
+
+    month_keys = [s.strftime("%Y-%m") for s in month_starts]
+    snapshots = {s["_id"]: s async for s in db.plan_snapshots.find({"_id": {"$in": month_keys}})}
+
+    rows = []
+    for start in month_starts:
+        month_key = start.strftime("%Y-%m")
+        end = datetime(start.year + 1, 1, 1, tzinfo=timezone.utc) if start.month == 12 else datetime(start.year, start.month + 1, 1, tzinfo=timezone.utc)
+        canceled = await db.businesses.count_documents({"canceled_at": {"$gte": start.isoformat(), "$lt": end.isoformat()}})
+        snap = snapshots.get(month_key)
+        if snap:
+            existing_at_start = snap["paying_count"]
+            source = "snapshot"
+        else:
+            existing_at_start = await db.businesses.count_documents({"created_at": {"$lt": start.isoformat()}})
+            source = "approximation"
+        rate = round(canceled / existing_at_start * 100, 2) if existing_at_start else 0.0
+        rows.append({"month": month_key, "canceled": canceled, "existing_at_start": existing_at_start,
+                     "churn_rate_pct": rate, "denominator_source": source})
+
+    if format:
+        from exports import export_response
+        columns = [("month", "Month"), ("canceled", "Canceled"), ("existing_at_start", "Existing at Start"),
+                  ("churn_rate_pct", "Churn Rate %"), ("denominator_source", "Denominator Source")]
+        return export_response(format, rows, columns, "churn", "Churn Report")
+    return rows
+
+
 @router.get("/revenue-timeseries")
 async def revenue_timeseries(days: int = 30, user=Depends(get_current_user)):
     await _ensure_admin(user)
@@ -167,8 +244,25 @@ async def revenue_timeseries(days: int = 30, user=Depends(get_current_user)):
 # =====================================================================
 # BUSINESSES
 # =====================================================================
+def _health_score(biz: dict, kb_chunks: int, conversations: int) -> dict:
+    """A simple, transparent customer health score (0-100) combining engagement, setup
+    completeness, and payment status -- not a black box. Each factor is visible in the
+    breakdown so an admin can see *why* a business scored the way it did, not just the number."""
+    factors = []
+    usage_ratio = (biz.get("monthly_used", 0) / biz.get("monthly_limit", 100)) if biz.get("monthly_limit") else 0
+    engaged = 0 < usage_ratio < 1.5  # actively used, not completely idle, not wildly over (may signal churn-risk frustration)
+    factors.append(("Actively chatting", engaged))
+    factors.append(("Knowledge base set up", kb_chunks >= 3))
+    factors.append(("Has real conversations", conversations >= 1))
+    factors.append(("Payment in good standing", biz.get("subscription_status", "active") == "active"))
+    factors.append(("On a paid plan", biz.get("plan", "free") != "free"))
+    score = round(100 * sum(1 for _, ok in factors if ok) / len(factors))
+    return {"score": score, "factors": [{"label": l, "ok": ok} for l, ok in factors]}
+
+
 @router.get("/businesses")
-async def list_businesses(q: Optional[str] = None, plan: Optional[str] = None, user=Depends(get_current_user)):
+async def list_businesses(q: Optional[str] = None, plan: Optional[str] = None, format: Optional[str] = None,
+                          user=Depends(get_current_user)):
     await _ensure_admin(user)
     query: dict = {}
     if plan: query["plan"] = plan
@@ -181,13 +275,24 @@ async def list_businesses(q: Optional[str] = None, plan: Optional[str] = None, u
             {"business_id": q},
         ]
     items = await db.businesses.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    # attach owner info
+    # attach owner info + health score
     for b in items:
         owner = await db.users.find_one({"user_id": b.get("owner_user_id")}, {"_id": 0, "email": 1, "name": 1})
         b["owner_email"] = owner.get("email") if owner else None
         b["owner_name"] = owner.get("name") if owner else None
         b["kb_chunks"] = await db.knowledge_chunks.count_documents({"business_id": b["business_id"]})
         b["conversations"] = await db.conversations.count_documents({"business_id": b["business_id"]})
+        b["health"] = _health_score(b, b["kb_chunks"], b["conversations"])["score"]
+
+    if format:
+        from exports import export_response
+        columns = [
+            ("name", "Business"), ("owner_email", "Owner Email"), ("plan", "Plan"),
+            ("subscription_status", "Status"), ("monthly_used", "Chats Used"), ("monthly_limit", "Chat Limit"),
+            ("kb_chunks", "Knowledge Chunks"), ("conversations", "Conversations"), ("health", "Health Score"),
+            ("country", "Country"), ("created_at", "Signed Up"),
+        ]
+        return export_response(format, items, columns, "businesses", "Businesses Report")
     return items
 
 
@@ -312,34 +417,40 @@ async def user_action(uid: str, payload: UserAction, request: Request, user=Depe
 # SUBSCRIPTIONS / INVOICES
 # =====================================================================
 @router.get("/invoices")
-async def all_invoices(user=Depends(get_current_user)):
+async def all_invoices(format: Optional[str] = None, user=Depends(get_current_user)):
     await _ensure_admin(user)
     items = await db.invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     for i in items:
         b = await db.businesses.find_one({"business_id": i["business_id"]}, {"_id": 0, "name": 1})
         i["business_name"] = b["name"] if b else None
+
+    if format:
+        from exports import export_response
+        columns = [
+            ("invoice_number", "Invoice #"), ("business_name", "Business"), ("plan", "Plan"),
+            ("status", "Status"), ("taxable_value_paise", "Taxable Value (paise)"),
+            ("total_tax_paise", "Tax (paise)"), ("total_paise", "Total (paise)"),
+            ("is_intra_state", "Intra-state"), ("created_at", "Date"),
+        ]
+        return export_response(format, items, columns, "invoices", "Invoices Report")
     return items
 
 
 class RefundIn(BaseModel):
     reason: Optional[str] = None
+    amount_paise: Optional[int] = None  # None = full remaining refund
 
 
 @router.post("/invoices/{invoice_id}/refund")
 async def refund_invoice(invoice_id: str, payload: RefundIn, request: Request, user=Depends(get_current_user)):
+    """Thin wrapper around the real refund flow (routers/billing.py) -- kept at this URL for
+    backward compatibility with existing admin-portal links, but delegates entirely rather
+    than duplicating the Razorpay call and GST-aware partial-refund accounting."""
     await _ensure_admin(user)
-    inv = await db.invoices.find_one({"id": invoice_id})
-    if not inv: raise HTTPException(404, "Not found")
-    if inv.get("status") == "refunded":
-        raise HTTPException(400, "Already refunded")
-    await db.invoices.update_one({"id": invoice_id}, {"$set": {"status": "refunded", "refund_reason": payload.reason, "refunded_at": datetime.now(timezone.utc).isoformat()}})
-    # A refunded invoice should also drop the business back to Free -- otherwise they
-    # keep paid-tier access for free indefinitely.
-    free_limit = await get_plan_limit("free", PLANS["free"]["limit"])
-    await db.businesses.update_one({"business_id": inv["business_id"]},
-                                   {"$set": {"plan": "free", "monthly_limit": free_limit}})
-    await audit_log(request, user["user_id"], "invoice.refund", "invoice", invoice_id, {"amount_inr": inv.get("amount_inr"), "reason": payload.reason})
-    return {"ok": True}
+    from routers.billing import refund as billing_refund, RefundIn as BillingRefundIn
+    result = await billing_refund(request, BillingRefundIn(invoice_id=invoice_id, amount_paise=payload.amount_paise,
+                                                            reason=payload.reason), user)
+    return result
 
 
 # =====================================================================
@@ -429,6 +540,15 @@ async def all_referrals(user=Depends(get_current_user)):
         r["referrer_email"] = owner.get("email") if owner else None
         r["referred_email"] = referred.get("email") if referred else None
     return refs
+
+
+@router.get("/enterprise-leads")
+async def list_enterprise_leads(user=Depends(get_current_user)):
+    """Backstop for POST /billing/enterprise-inquiry -- every lead lands here regardless of
+    whether the notification email was configured/delivered, so nothing gets lost to an
+    inbox nobody checked."""
+    await _ensure_admin(user)
+    return await db.enterprise_leads.find({}, {"_id": 0}).sort("created_at", -1).limit(300).to_list(300)
 
 
 # =====================================================================
@@ -531,7 +651,7 @@ async def create_broadcast(payload: Broadcast, request: Request, user=Depends(ge
     # figure recipients
     biz_q: dict = {}
     if payload.audience == "free": biz_q["plan"] = "free"
-    elif payload.audience == "paid": biz_q["plan"] = {"$in": ["starter", "pro"]}
+    elif payload.audience == "paid": biz_q["plan"] = {"$ne": "free"}
     elif payload.audience == "specific" and payload.business_ids:
         biz_q["business_id"] = {"$in": payload.business_ids}
     recipients = await db.businesses.find(biz_q, {"_id": 0, "business_id": 1}).to_list(5000)
@@ -697,4 +817,25 @@ async def trigger_weekly_jobs(request: Request, user=Depends(get_current_user)):
     from scheduler import run_weekly_jobs
     result = await run_weekly_jobs()
     await audit_log(request, user["user_id"], "cron.run_weekly_jobs", "system", "weekly_jobs", result)
+    return {"ok": True, **result}
+
+
+@router.post("/cron/run-billing-lifecycle")
+async def trigger_billing_lifecycle(request: Request, user=Depends(get_current_user)):
+    await _ensure_admin(user)
+    from scheduler import billing_lifecycle_job
+    result = await billing_lifecycle_job()
+    await audit_log(request, user["user_id"], "cron.run_billing_lifecycle", "system", "billing_lifecycle", result)
+    return {"ok": True, **result}
+
+
+@router.post("/cron/run-plan-snapshot")
+async def trigger_plan_snapshot(request: Request, user=Depends(get_current_user)):
+    """Manually seeds/refreshes this month's paying-business snapshot -- run this once
+    right after deploying so /admin/churn has real data for the current month instead of
+    waiting for the 1st of next month."""
+    await _ensure_admin(user)
+    from scheduler import plan_snapshot_job
+    result = await plan_snapshot_job()
+    await audit_log(request, user["user_id"], "cron.run_plan_snapshot", "system", "plan_snapshot", result)
     return {"ok": True, **result}

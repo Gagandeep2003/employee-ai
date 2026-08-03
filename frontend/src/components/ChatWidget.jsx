@@ -4,7 +4,9 @@ import { api } from "../lib/api";
 
 // Respectful-but-playful nudges shown in a teaser bubble before the visitor has
 // opened the chat. Never guilt-trips or uses dark-pattern language -- just a
-// friendly nudge, shown once per browser session, easily dismissed.
+// friendly nudge, shown once per browser session, easily dismissed. Owner-
+// configurable: widget.teaser_enabled (default true), widget.teaser_delay_seconds
+// (default 4).
 const TEASER_LINES = [
   "Psst -- I've got answers. No clicking required \uD83D\uDC4B",
   "Looking for something? Just ask me, I'm faster than digging through menus.",
@@ -15,8 +17,23 @@ const TEASER_LINES = [
   "Got a question? I'm right here, and I don't mind repeating myself.",
 ];
 
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+  return reduced;
+}
+
 export default function ChatWidget({ businessId, config }) {
   const [open, setOpen] = useState(false);
+  const [everOpened, setEverOpened] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [convId, setConvId] = useState(null);
@@ -25,13 +42,20 @@ export default function ChatWidget({ businessId, config }) {
   const [handoff, setHandoff] = useState(false);
   const [handoffForm, setHandoffForm] = useState(null); // null | { email: "", note: "" }
   const [teaser, setTeaser] = useState(null);
+  const [mounted, setMounted] = useState(false);
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
+  const toggleRef = useRef(null);
+  const reducedMotion = usePrefersReducedMotion();
 
   const primary = config?.widget?.primary_color || "#1E3F33";
   const accent = config?.widget?.accent_color || "#C4A47C";
   const welcome = config?.widget?.welcome_message || "Hi! How can I help?";
   const businessName = config?.business_name || "AI Employee";
   const showBranding = config?.widget?.show_branding !== false;
+  const teaserEnabled = config?.widget?.teaser_enabled !== false;
+  const teaserDelayMs = Math.max(1, Number(config?.widget?.teaser_delay_seconds ?? 4)) * 1000;
+  const pulseEnabled = config?.widget?.pulse_enabled !== false;
   const teaserKey = useMemo(() => `ai_employee_teaser_${businessId}`, [businessId]);
 
   // Widget corner is driven entirely by config -- never hardcoded. Anything
@@ -43,24 +67,42 @@ export default function ChatWidget({ businessId, config }) {
   const teaserTailClass = isBottomLeft ? "rounded-bl-sm" : "rounded-br-sm";
   const teaserCloseClass = isBottomLeft ? "-left-2" : "-right-2";
 
+  // Entrance animation -- the bubble scales/fades in once on first paint, rather
+  // than just appearing. Skipped entirely under prefers-reduced-motion.
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 50); return () => clearTimeout(t); }, []);
+
   useEffect(() => {
     if (messages.length === 0) setMessages([{ role: "assistant", text: welcome }]);
   }, [welcome]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
+  }, [messages, loading, reducedMotion]);
+
+  useEffect(() => {
+    if (open) { setEverOpened(true); requestAnimationFrame(() => inputRef.current?.focus()); }
+  }, [open]);
+
+  // Escape closes the panel and returns focus to the toggle button -- basic
+  // keyboard-accessible modal behavior.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") { setOpen(false); toggleRef.current?.focus(); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   // Show a friendly teaser bubble once per session if the visitor hasn't opened
   // the chat yet -- never repeats within the same session once dismissed or opened.
+  // Owner can disable this entirely (widget.teaser_enabled) or tune the delay.
   useEffect(() => {
-    if (open) return;
+    if (open || !teaserEnabled) return;
     if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(teaserKey)) return;
     const showTimer = setTimeout(() => {
       setTeaser(TEASER_LINES[Math.floor(Math.random() * TEASER_LINES.length)]);
-    }, 4000);
+    }, teaserDelayMs);
     return () => clearTimeout(showTimer);
-  }, [open, teaserKey]);
+  }, [open, teaserKey, teaserEnabled, teaserDelayMs]);
 
   useEffect(() => {
     if (!teaser) return;
@@ -143,19 +185,35 @@ export default function ChatWidget({ businessId, config }) {
     }
   };
 
+  const entranceClass = reducedMotion ? "" : `transition-all duration-500 ease-out ${mounted ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-75 translate-y-4"}`;
+  // The idle "breathe" glow and gentle float are cosmetic flourishes only -- both
+  // are no-ops (classes simply omitted) under prefers-reduced-motion, and neither
+  // ever plays once the panel is open (a pulsing button behind an open panel would
+  // just be a distraction, not a feature).
+  const showIdleFx = !open && !reducedMotion && everOpened === false;
+
   return (
     <div className="fixed inset-0 pointer-events-none">
+      {!reducedMotion && (
+        <style>{`
+          @keyframes ai-emp-pulse-ring { 0% { box-shadow: 0 0 0 0 ${primary}55; } 70% { box-shadow: 0 0 0 14px ${primary}00; } 100% { box-shadow: 0 0 0 0 ${primary}00; } }
+          @keyframes ai-emp-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+          .ai-emp-pulse { animation: ai-emp-pulse-ring 2.6s cubic-bezier(0.4,0,0.6,1) infinite; }
+          .ai-emp-float { animation: ai-emp-float 3.2s ease-in-out infinite; }
+        `}</style>
+      )}
       <div className={`absolute bottom-4 ${cornerClasses} pointer-events-auto flex flex-col gap-3`}>
         {!open && teaser && (
           <div
-            className={`max-w-[240px] rounded-2xl ${teaserTailClass} shadow-lg border bg-white px-3.5 py-2.5 text-sm text-gray-800 relative animate-in fade-in slide-in-from-bottom-2`}
+            className={`max-w-[240px] rounded-2xl ${teaserTailClass} shadow-lg border bg-white px-3.5 py-2.5 text-sm text-gray-800 relative ${reducedMotion ? "" : "animate-in fade-in slide-in-from-bottom-2"}`}
             style={{ borderColor: "rgba(0,0,0,0.08)" }}
             data-testid="widget-teaser"
+            role="status"
           >
             <button
               onClick={dismissTeaser}
               aria-label="Dismiss"
-              className={`absolute -top-2 ${teaserCloseClass} w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600`}
+              className={`absolute -top-2 ${teaserCloseClass} w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 transition-colors`}
             >
               <X size={11} weight="bold" />
             </button>
@@ -167,18 +225,21 @@ export default function ChatWidget({ businessId, config }) {
 
         {open && (
           <div
-            className="w-[360px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-6rem)] rounded-lg shadow-xl border overflow-hidden flex flex-col bg-white"
+            className={`w-[360px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-6rem)] rounded-lg shadow-xl border overflow-hidden flex flex-col bg-white ${reducedMotion ? "" : "animate-in fade-in slide-in-from-bottom-4 duration-300"}`}
             style={{ borderColor: "rgba(0,0,0,0.08)" }}
             data-testid="chat-window"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Chat with ${businessName}`}
           >
             <div style={{ background: primary }} className="text-white px-4 py-3 flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em]" style={{ color: accent }}>AI Employee</div>
                 <div className="font-display text-base">{businessName}</div>
               </div>
-              <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white" data-testid="close-widget"><X size={20} /></button>
+              <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors" aria-label="Close chat" data-testid="close-widget"><X size={20} /></button>
             </div>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F7F7F5]">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F7F7F5]" aria-live="polite">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
@@ -196,7 +257,13 @@ export default function ChatWidget({ businessId, config }) {
                   </div>
                 </div>
               ))}
-              {loading && <div className="text-xs text-gray-500">Thinking…</div>}
+              {loading && (
+                <div className="flex items-center gap-1 pl-1" aria-label="AI is typing">
+                  {[0, 1, 2].map((i) => (
+                    <span key={i} className={`w-1.5 h-1.5 rounded-full bg-gray-400 ${reducedMotion ? "" : "animate-bounce"}`} style={reducedMotion ? {} : { animationDelay: `${i * 0.12}s` }} />
+                  ))}
+                </div>
+              )}
 
               {handoffForm && (
                 <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2" data-testid="handoff-form">
@@ -206,12 +273,14 @@ export default function ChatWidget({ businessId, config }) {
                     onChange={(e) => setHandoffForm((f) => ({ ...f, note: e.target.value }))}
                     placeholder="Briefly describe what you need help with…"
                     rows={2}
+                    aria-label="What you need help with"
                     className="w-full text-sm px-2 py-1.5 rounded-md border border-gray-200 outline-none focus:border-gray-400 resize-none"
                   />
                   <input
                     value={handoffForm.name}
                     onChange={(e) => setHandoffForm((f) => ({ ...f, name: e.target.value }))}
                     placeholder="Your name"
+                    aria-label="Your name"
                     className="w-full text-sm px-2 py-1.5 rounded-md border border-gray-200 outline-none focus:border-gray-400"
                   />
                   <input
@@ -219,6 +288,7 @@ export default function ChatWidget({ businessId, config }) {
                     onChange={(e) => setHandoffForm((f) => ({ ...f, email: e.target.value }))}
                     placeholder="Your email (so we can reply)"
                     type="email"
+                    aria-label="Your email"
                     className="w-full text-sm px-2 py-1.5 rounded-md border border-gray-200 outline-none focus:border-gray-400"
                   />
                   <div className="flex items-center gap-2 justify-end">
@@ -226,7 +296,7 @@ export default function ChatWidget({ businessId, config }) {
                     <button
                       onClick={submitHandoff}
                       style={{ background: primary }}
-                      className="text-xs text-white px-3 py-1.5 rounded-md flex items-center gap-1 hover:opacity-90"
+                      className="text-xs text-white px-3 py-1.5 rounded-md flex items-center gap-1 hover:opacity-90 transition-opacity"
                       data-testid="handoff-submit"
                     >
                       <PaperPlaneTilt size={12} weight="fill" /> Send to the team
@@ -238,16 +308,19 @@ export default function ChatWidget({ businessId, config }) {
             <div className="border-t border-gray-200 p-3 bg-white">
               <div className="flex items-center gap-2">
                 <input
+                  ref={inputRef}
                   data-testid="widget-input"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && send()}
                   placeholder="Ask anything about us…"
+                  aria-label="Type your message"
                   className="flex-1 text-sm px-3 py-2 rounded-md border border-gray-200 outline-none focus:border-gray-400"
                 />
                 <button
                   data-testid="widget-send"
                   onClick={send}
+                  aria-label="Send message"
                   className="p-2 rounded-md text-white transition-transform hover:scale-105"
                   style={{ background: primary }}
                 >
@@ -255,7 +328,7 @@ export default function ChatWidget({ businessId, config }) {
                 </button>
               </div>
               {!handoff && !handoffForm && (
-                <button onClick={() => setHandoffForm({ email: "", name: "", note: "" })} className="mt-2 text-[11px] text-gray-500 hover:text-gray-800 flex items-center gap-1" data-testid="footer-handoff">
+                <button onClick={() => setHandoffForm({ email: "", name: "", note: "" })} className="mt-2 text-[11px] text-gray-500 hover:text-gray-800 flex items-center gap-1 transition-colors" data-testid="footer-handoff">
                   <User size={12} /> Talk to a human
                 </button>
               )}
@@ -266,10 +339,13 @@ export default function ChatWidget({ businessId, config }) {
           </div>
         )}
         <button
+          ref={toggleRef}
           data-testid="widget-toggle"
           onClick={() => { dismissTeaser(); setOpen(!open); }}
+          aria-label={open ? "Close chat" : `Chat with ${businessName}`}
+          aria-expanded={open}
           style={{ background: primary }}
-          className="w-14 h-14 rounded-full shadow-lg text-white flex items-center justify-center hover:scale-105 transition-transform"
+          className={`w-14 h-14 rounded-full shadow-lg text-white flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-xl active:scale-95 ${entranceClass} ${showIdleFx && pulseEnabled ? "ai-emp-pulse" : ""} ${showIdleFx ? "ai-emp-float" : ""}`}
         >
           {open ? <X size={22} weight="bold" /> : <ChatCircleDots size={24} weight="fill" />}
         </button>

@@ -46,7 +46,7 @@ export default function ResetPassword() {
         <form onSubmit={submit} className="mt-8 space-y-4">
           <input
             type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)}
-            data-testid="reset-password" placeholder="New password"
+            data-testid="reset-password" aria-label="New password" placeholder="New password"
             className="w-full px-3 py-2.5 rounded-md border border-border bg-card outline-none focus:ring-2 focus:ring-primary"
           />
           <div className="text-[11px] text-muted-foreground">At least 8 characters.</div>

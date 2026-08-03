@@ -7,17 +7,36 @@ from the anonymous public /chat endpoint must be narrowly scoped and always
 re-validated server-side -- the model's understanding of "is this slot free"
 is never trusted on its own, every booking is re-checked against real data
 right before it's written.
+
+Timezone handling: a business's working_hours ("09:00"-"17:00") are always in
+that business's OWN local time (Business.timezone, e.g. "Asia/Kolkata"), never
+UTC -- a business that says "we open at 9am" means 9am where they are, not 9am
+UTC. Every datetime is converted to that timezone for interpreting/displaying
+a date or time, and stored as UTC-aware ISO strings (unambiguous, sortable,
+consistent with every other timestamp in this codebase). Uses the stdlib
+zoneinfo module -- no extra dependency.
 """
 import re
 import json
 import uuid
 from datetime import datetime, timedelta, date as date_cls, timezone as tz
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from db import db
 
 BOOKING_RE = re.compile(r"<booking>\s*(\{.*?\})\s*</booking>", re.DOTALL)
 
 DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def resolve_tz(business_tz: str) -> ZoneInfo:
+    """Falls back to UTC for an unset/invalid timezone string rather than raising --
+    a booking flow should degrade to (clearly-labeled) UTC, not 500."""
+    try:
+        return ZoneInfo(business_tz or "UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("UTC")
+
 
 BOOKING_SCHEMA = """APPOINTMENT BOOKING: this business has appointment booking enabled. If the customer
 wants to book, check availability for, or cancel an appointment, you may emit ONE booking
@@ -35,7 +54,8 @@ To cancel (the customer must give you their reference code, e.g. APT-AB12CD):
 Rules:
 - Only use service names exactly as listed below. Never invent a service or a price.
 - Ask for the customer's name and (phone or email) before booking -- ask for whichever is missing, one action per turn.
-- Resolve relative dates ("tomorrow", "next Monday") into YYYY-MM-DD using the CURRENT DATE given above.
+- Resolve relative dates ("tomorrow", "next Monday") into YYYY-MM-DD using the CURRENT DATE given above (already in this business's local timezone).
+- All times you're given or should give the customer are this business's LOCAL time, not UTC.
 - Do not tell the customer a booking is confirmed yourself -- the system checks real availability and confirms or rejects it; just emit the action and let the result speak for itself next turn.
 """
 
@@ -62,9 +82,11 @@ def _day_key(d: date_cls) -> str:
 
 
 async def get_settings(business_id: str):
-    biz = await db.businesses.find_one({"business_id": business_id}, {"_id": 0, "appointment_settings": 1})
+    biz = await db.businesses.find_one({"business_id": business_id}, {"_id": 0, "appointment_settings": 1, "timezone": 1})
     settings = (biz or {}).get("appointment_settings") or {}
-    return settings if settings.get("enabled") else None
+    if not settings.get("enabled"):
+        return None
+    return {**settings, "_business_timezone": (biz or {}).get("timezone", "UTC")}
 
 
 def describe_settings(settings: dict) -> str:
@@ -78,13 +100,21 @@ def describe_settings(settings: dict) -> str:
         f"  - {k}: {v[0]}-{v[1]}" if v else f"  - {k}: closed"
         for k, v in [(d, hours.get(d)) for d in DAY_KEYS]
     )
-    return f"Services offered:\n{svc_lines}\n\nWorking hours (24h):\n{hour_lines}\n"
+    tz_name = settings.get("_business_timezone", "UTC")
+    holidays = settings.get("holidays") or []
+    holiday_line = f"\n\nClosed on: {', '.join(sorted(holidays))}" if holidays else ""
+    return f"Services offered:\n{svc_lines}\n\nWorking hours ({tz_name}, 24h):\n{hour_lines}{holiday_line}\n"
+
+
+def _local_now(zone: ZoneInfo) -> datetime:
+    return datetime.now(tz.utc).astimezone(zone)
 
 
 async def get_open_slots(business_id: str, service: str, date_str: str) -> dict:
     settings = await get_settings(business_id)
     if not settings:
         return {"ok": False, "error": "Appointment booking is not enabled for this business"}
+    zone = resolve_tz(settings["_business_timezone"])
     services = {s["name"]: s for s in settings.get("services", [])}
     if service not in services:
         return {"ok": False, "error": f"Unknown service '{service}'"}
@@ -92,8 +122,10 @@ async def get_open_slots(business_id: str, service: str, date_str: str) -> dict:
         d = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return {"ok": False, "error": "Invalid date format, expected YYYY-MM-DD"}
-    if d < datetime.now(tz.utc).date():
+    if d < _local_now(zone).date():
         return {"ok": False, "error": "That date is in the past"}
+    if date_str in (settings.get("holidays") or []):
+        return {"ok": True, "slots": [], "note": "Closed for a holiday"}
 
     hours = (settings.get("working_hours") or {}).get(_day_key(d))
     if not hours:
@@ -103,8 +135,8 @@ async def get_open_slots(business_id: str, service: str, date_str: str) -> dict:
     interval = int(settings.get("slot_interval_minutes", 30))
     duration = int(services[service].get("duration_minutes", interval))
 
-    day_start = datetime(d.year, d.month, d.day, start_h, start_m, tzinfo=tz.utc)
-    day_end = datetime(d.year, d.month, d.day, end_h, end_m, tzinfo=tz.utc)
+    day_start = datetime(d.year, d.month, d.day, start_h, start_m, tzinfo=zone).astimezone(tz.utc)
+    day_end = datetime(d.year, d.month, d.day, end_h, end_m, tzinfo=zone).astimezone(tz.utc)
 
     existing = await db.appointments.find({
         "business_id": business_id, "status": "confirmed",
@@ -117,7 +149,7 @@ async def get_open_slots(business_id: str, service: str, date_str: str) -> dict:
     while cur + timedelta(minutes=duration) <= day_end:
         slot_end = cur + timedelta(minutes=duration)
         if not any(cur < b_end and slot_end > b_start for b_start, b_end in busy):
-            slots.append(cur.strftime("%H:%M"))
+            slots.append(cur.astimezone(zone).strftime("%H:%M"))  # shown back in the business's local time
         cur += timedelta(minutes=interval)
     return {"ok": True, "slots": slots}
 
@@ -130,6 +162,7 @@ async def book(business_id: str, service: str, date_str: str, time_str: str,
     settings = await get_settings(business_id)
     if not settings:
         return {"ok": False, "error": "Appointment booking is not enabled for this business"}
+    zone = resolve_tz(settings["_business_timezone"])
     services = {s["name"]: s for s in settings.get("services", [])}
     if service not in services:
         return {"ok": False, "error": f"Unknown service '{service}'"}
@@ -139,9 +172,11 @@ async def book(business_id: str, service: str, date_str: str, time_str: str,
     except ValueError:
         return {"ok": False, "error": "Invalid date/time format"}
 
-    start = datetime(d.year, d.month, d.day, h, m, tzinfo=tz.utc)
+    start = datetime(d.year, d.month, d.day, h, m, tzinfo=zone).astimezone(tz.utc)
     if start < datetime.now(tz.utc):
         return {"ok": False, "error": "That time is in the past"}
+    if date_str in (settings.get("holidays") or []):
+        return {"ok": False, "error": "Closed for a holiday that day"}
     duration = int(services[service].get("duration_minutes", settings.get("slot_interval_minutes", 30)))
     end = start + timedelta(minutes=duration)
 
@@ -150,8 +185,8 @@ async def book(business_id: str, service: str, date_str: str, time_str: str,
         return {"ok": False, "error": "Closed that day"}
     open_h, open_m = _parse_hhmm(hours[0])
     close_h, close_m = _parse_hhmm(hours[1])
-    day_start = datetime(d.year, d.month, d.day, open_h, open_m, tzinfo=tz.utc)
-    day_end = datetime(d.year, d.month, d.day, close_h, close_m, tzinfo=tz.utc)
+    day_start = datetime(d.year, d.month, d.day, open_h, open_m, tzinfo=zone).astimezone(tz.utc)
+    day_end = datetime(d.year, d.month, d.day, close_h, close_m, tzinfo=zone).astimezone(tz.utc)
     if start < day_start or end > day_end:
         return {"ok": False, "error": "Outside working hours"}
 
@@ -177,7 +212,7 @@ async def book(business_id: str, service: str, date_str: str, time_str: str,
         "conversation_id": conversation_id,
         "created_at": datetime.now(tz.utc).isoformat(),
     })
-    return {"ok": True, "reference": ref, "start_time": start.isoformat(), "service": service,
+    return {"ok": True, "reference": ref, "start_time": start.astimezone(zone).isoformat(), "service": service,
             "customer_name": customer_name, "customer_phone": customer_phone, "customer_email": customer_email}
 
 

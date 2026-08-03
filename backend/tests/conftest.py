@@ -47,6 +47,13 @@ sys.modules["motor.motor_asyncio"] = motor_asyncio_mod
 @pytest.fixture(autouse=True)
 def reset_db():
     _shared_fake_db._collections.clear()
+    # slowapi's in-memory limiter is a module-level singleton (see ratelimit.py) that
+    # otherwise persists for the whole pytest process -- without this, counters like
+    # "10/hour" on signup/login accumulate across unrelated tests and start failing
+    # later tests with 429s once the suite has made enough requests in aggregate.
+    from ratelimit import limiter, api_key_storage
+    limiter.reset()
+    api_key_storage.reset()
     yield _shared_fake_db
 
 
@@ -69,16 +76,41 @@ def mock_llm(monkeypatch):
     async def fake_snapshot(business_name, category, combined_text):
         return "**What we found**\n- mocked snapshot"
 
+    async def fake_summarize(business_name, transcript):
+        return "[MOCKED SUMMARY] Customer asked a few questions; nothing unresolved."
+
+    async def fake_title(business_name, first_message):
+        return "Mocked conversation title"
+
+    async def fake_extract_appointment_settings(business_name, category, combined_text):
+        if "MONDAY 9AM TO 5PM" in combined_text.upper():
+            return {
+                "working_hours": {"mon": ["09:00", "17:00"], "tue": None, "wed": None,
+                                  "thu": None, "fri": None, "sat": None, "sun": None},
+                "services": [{"name": "Consultation", "duration_minutes": 30}],
+                "holidays": ["2026-12-25"],
+                "timezone_guess": "Asia/Kolkata",
+                "confidence": "high",
+            }
+        return {"working_hours": {d: None for d in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]},
+                "services": [], "holidays": [], "timezone_guess": None, "confidence": "low"}
+
     monkeypatch.setattr(llm, "rag_answer", fake_rag_answer)
     monkeypatch.setattr(llm, "owner_chat_reply", fake_owner_chat_reply)
     monkeypatch.setattr(llm, "generate_business_snapshot", fake_snapshot)
+    monkeypatch.setattr(llm, "summarize_conversation", fake_summarize)
+    monkeypatch.setattr(llm, "generate_conversation_title", fake_title)
+    monkeypatch.setattr(llm, "extract_appointment_settings", fake_extract_appointment_settings)
     # Also patch the references already imported into router modules
     import routers.chat as chat_router
     import routers.owner_chat as owner_chat_router
     import routers.businesses as businesses_router
     monkeypatch.setattr(chat_router, "rag_answer", fake_rag_answer)
+    monkeypatch.setattr(chat_router, "summarize_conversation", fake_summarize)
+    monkeypatch.setattr(chat_router, "generate_conversation_title", fake_title)
     monkeypatch.setattr(owner_chat_router, "owner_chat_reply", fake_owner_chat_reply)
     monkeypatch.setattr(businesses_router, "generate_business_snapshot", fake_snapshot)
+    monkeypatch.setattr(businesses_router, "extract_appointment_settings", fake_extract_appointment_settings)
 
 
 @pytest.fixture

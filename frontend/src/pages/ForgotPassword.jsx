@@ -39,7 +39,7 @@ export default function ForgotPassword() {
             <form onSubmit={submit} className="mt-8 space-y-4">
               <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                data-testid="forgot-email" placeholder="you@business.com"
+                data-testid="forgot-email" aria-label="Email address" placeholder="you@business.com"
                 className="w-full px-3 py-2.5 rounded-md border border-border bg-card outline-none focus:ring-2 focus:ring-primary"
               />
               <button type="submit" disabled={busy} data-testid="forgot-submit"

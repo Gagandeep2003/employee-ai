@@ -1,19 +1,18 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional
 import uuid
 from datetime import datetime, timezone
 
 from db import db
-from retrieval import search
-from llm import rag_answer
+from llm import rag_answer, summarize_conversation, generate_conversation_title
+import context_builder
 from ratelimit import limiter
+import usage
 from usage import ensure_current_period
-from booking import get_settings as get_booking_settings, describe_settings as describe_booking, \
-    parse_booking, execute_booking_action, BOOKING_SCHEMA
+from booking import get_settings as get_booking_settings, BOOKING_SCHEMA, parse_booking, execute_booking_action
 from email_sender import send_handoff_email, send_booking_email
 from platform_settings import get_settings as get_platform_settings
-from freshness import days_since
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -21,6 +20,16 @@ LANGUAGE_NAMES = {
     "en": "English", "hi": "Hindi", "es": "Spanish", "fr": "French",
     "de": "German", "ar": "Arabic", "pt": "Portuguese",
 }
+
+
+async def _generate_and_store_title(conv_id: str, business_name: str, first_message: str):
+    title = await generate_conversation_title(business_name, first_message)
+    if title:
+        # Only overwrite if still auto-generated -- guards against a race where the owner
+        # renamed it (e.g. from a fast follow-up message) before this background task ran.
+        await db.conversations.update_one(
+            {"conversation_id": conv_id, "title_auto_generated": True}, {"$set": {"title": title}},
+        )
 
 
 class ChatIn(BaseModel):
@@ -32,7 +41,7 @@ class ChatIn(BaseModel):
 
 @router.post("")
 @limiter.limit("30/minute")
-async def widget_chat(request: Request, payload: ChatIn):
+async def widget_chat(request: Request, payload: ChatIn, background_tasks: BackgroundTasks):
     settings = await get_platform_settings()
     if settings.get("maintenance_mode"):
         return {"error": "maintenance", "message": "We're doing some quick maintenance -- please try again in a few minutes."}
@@ -42,14 +51,17 @@ async def widget_chat(request: Request, payload: ChatIn):
         raise HTTPException(404, "Business not found")
     biz = await ensure_current_period(biz)
 
-    if biz.get("monthly_used", 0) >= biz.get("monthly_limit", 100):
+    over_limit = biz.get("monthly_used", 0) >= biz.get("monthly_limit", 100)
+    overage_billing_on = settings.get("overage_billing_enabled", False) and biz.get("plan") != "free"
+    if over_limit and not overage_billing_on:
         return {"error": "limit_reached", "message": "Monthly chat limit reached. Please contact the business owner."}
 
     visitor_id = payload.visitor_id or f"vis_{uuid.uuid4().hex[:10]}"
     now = datetime.now(timezone.utc).isoformat()
 
     conv_id = payload.conversation_id
-    if not conv_id:
+    is_new_conversation = not conv_id
+    if is_new_conversation:
         conv_id = f"conv_{uuid.uuid4().hex[:12]}"
         await db.conversations.insert_one({
             "conversation_id": conv_id,
@@ -58,6 +70,12 @@ async def widget_chat(request: Request, payload: ChatIn):
             "status": "open",
             "unanswered": False,
             "outcome": None,  # None | lead | booked | resolved | lost -- owner-tagged or auto-set on booking
+            "title": None,
+            "title_auto_generated": True,
+            "pinned": False,
+            "archived": False,
+            "summary": None,
+            "summary_through": 0,
             "created_at": now,
             "last_message_at": now,
             "message_count": 0,
@@ -72,45 +90,38 @@ async def widget_chat(request: Request, payload: ChatIn):
         "created_at": now,
     })
 
-    hits = await search(payload.business_id, payload.message, k=5)
-    top_score = hits[0][1] if hits else 0.0
+    hits_result = await context_builder.build_context(biz, payload.message, k=6)
+    top_score = hits_result["confidence"]
 
-    def _fmt_source(h):
-        chunk = h[0]
-        age = days_since(chunk.get("created_at"))
-        age_note = "today" if age == 0 else f"{age}d ago" if age < 9999 else "unknown age"
-        title = chunk.get("source_title") or chunk.get("source")
-        return f"[{title}, updated {age_note}]\n{chunk['text']}"
-
-    context = "\n\n".join(_fmt_source(h) for h in hits) or "(No knowledge available yet.)"
-
-    quick_facts = biz.get("quick_facts") or {}
-    live_lines = [v for k, v in (
-        ("hours_note", quick_facts.get("hours_note")),
-        ("special_or_promo", quick_facts.get("special_or_promo")),
-        ("announcement", quick_facts.get("announcement")),
-    ) if v]
-    live_info = ""
-    if live_lines:
-        qf_age = days_since(quick_facts.get("updated_at"))
-        live_info = ("LIVE INFO (set directly by the owner, " + (f"{qf_age}d ago" if qf_age < 9999 else "recently") +
-                     " -- this is more current than anything in CONTEXT below and should be trusted over it "
-                     "if they conflict):\n" + "\n".join(f"- {line}" for line in live_lines) + "\n")
-
-    history_docs = await db.messages.find({"conversation_id": conv_id}, {"_id": 0}).sort("created_at", 1).to_list(20)
+    history_docs = await db.messages.find({"conversation_id": conv_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
     history = [{"role": m["role"], "text": m["text"]} for m in history_docs[:-1]]
 
-    booking_settings = await get_booking_settings(payload.business_id)
-    booking_block = f"{BOOKING_SCHEMA}\n{describe_booking(booking_settings)}" if booking_settings else ""
+    # Conversation memory: once a thread runs long, the raw last-6-messages window (below)
+    # starts losing earlier context -- a name already given, a preference already stated.
+    # Maintain a rolling summary instead of resending the whole transcript every turn.
+    prompt_context = hits_result["prompt_context"]
+    conv_doc = await db.conversations.find_one({"conversation_id": conv_id}, {"_id": 0, "message_count": 1, "summary": 1, "summary_through": 1})
+    msg_count_so_far = (conv_doc or {}).get("message_count", 0)
+    if msg_count_so_far >= 12 and msg_count_so_far - (conv_doc or {}).get("summary_through", 0) >= 10:
+        transcript = "\n".join(f"{'Customer' if m['role'] == 'user' else 'AI'}: {m['text']}" for m in history_docs)
+        summary = await summarize_conversation(biz["name"], transcript)
+        if summary:
+            await db.conversations.update_one({"conversation_id": conv_id},
+                                              {"$set": {"summary": summary, "summary_through": msg_count_so_far}})
+            conv_doc = {**(conv_doc or {}), "summary": summary, "summary_through": msg_count_so_far}
+    if (conv_doc or {}).get("summary"):
+        prompt_context = f"=== CONVERSATION SO FAR ===\n{conv_doc['summary']}\n\n{prompt_context}"
 
-    unanswered = top_score < float(settings.get("confidence_threshold", 0.6)) or not hits
+    booking_settings = await get_booking_settings(payload.business_id)
+    booking_block = BOOKING_SCHEMA if booking_settings else ""
+
+    unanswered = top_score < float(settings.get("confidence_threshold", 0.6))
     booking_result = None
     try:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d (%A)")
         language = LANGUAGE_NAMES.get(biz.get("language"), None)
-        raw_answer = await rag_answer(biz["name"], context, history, payload.message,
-                                      current_date=today, booking_block=booking_block, language=language,
-                                      live_info=live_info)
+        raw_answer = await rag_answer(biz["name"], prompt_context, history, payload.message,
+                                      current_date=today, booking_block=booking_block, language=language)
         answer, booking_action = parse_booking(raw_answer)
         if booking_action and booking_settings:
             booking_result = await execute_booking_action(payload.business_id, booking_action, conv_id)
@@ -152,14 +163,21 @@ async def widget_chat(request: Request, payload: ChatIn):
         {"$set": {"last_message_at": datetime.now(timezone.utc).isoformat(), "unanswered": unanswered},
          "$inc": {"message_count": 2}}
     )
-    await db.businesses.update_one({"business_id": payload.business_id}, {"$inc": {"monthly_used": 1}})
+    inc = {"monthly_used": 1}
+    if over_limit and overage_billing_on:
+        inc["overage_count"] = 1
+    await db.businesses.update_one({"business_id": payload.business_id}, {"$inc": inc})
+    background_tasks.add_task(usage.maybe_send_quota_alert, biz, biz.get("monthly_used", 0) + 1)
+
+    if is_new_conversation:
+        background_tasks.add_task(_generate_and_store_title, conv_id, biz["name"], payload.message)
 
     return {
         "conversation_id": conv_id,
         "visitor_id": visitor_id,
         "answer": answer,
         "confidence": float(top_score),
-        "sources": [{"title": h[0].get("source_title"), "source": h[0].get("source")} for h in hits[:3]],
+        "sources": hits_result["sources"],
         "unanswered": unanswered,
     }
 
@@ -219,4 +237,62 @@ async def widget_config(business_id: str):
         "business_name": biz["name"],
         "widget": widget,
         "plan": biz.get("plan", "free"),
+    }
+
+
+@router.get("/business/{business_id}/landing-page")
+async def landing_page_data(business_id: str):
+    """Public data for the standalone hosted chat page (TalkPage.jsx) -- deliberately a
+    separate, richer endpoint from widget-config above rather than bloating that one,
+    since widget-config is fetched on every page the floating widget embeds on across the
+    internet and should stay minimal; this is fetched once per landing-page visit."""
+    biz = await db.businesses.find_one({"business_id": business_id}, {"_id": 0})
+    if not biz:
+        raise HTTPException(404, "Not found")
+
+    settings = await get_platform_settings()
+    widget = dict(biz.get("widget", {}))
+    if biz.get("plan", "free") == "free" and settings.get("watermark_required_on_free", True):
+        widget["show_branding"] = True
+
+    published_legal = await db.legal_documents.find(
+        {"is_published": True}, {"_id": 0, "doc_type": 1, "title": 1},
+    ).to_list(20)
+
+    appt = biz.get("appointment_settings") or {}
+    faqs = []
+    chunks = await db.knowledge_chunks.find(
+        {"business_id": business_id, "source_type": "faq"}, {"_id": 0, "source_title": 1, "text": 1},
+    ).to_list(12)
+    for c in chunks:
+        # stored as "Q: ...\nA: ..." (see actions.py/knowledge.py) -- split back into a
+        # clean question/answer pair for display rather than showing the raw Q:/A: text
+        text = c.get("text", "")
+        if text.startswith("Q:") and "\nA:" in text:
+            q, a = text[2:].split("\nA:", 1)
+            faqs.append({"question": q.strip(), "answer": a.strip()})
+        else:
+            faqs.append({"question": c.get("source_title", "Question"), "answer": text})
+
+    return {
+        "business_id": business_id,
+        "business_name": biz["name"],
+        "category": biz.get("category"),
+        "website": biz.get("website"),
+        "phone": biz.get("phone"),
+        "email": biz.get("email"),
+        "quick_facts": biz.get("quick_facts") or {},
+        "widget": widget,
+        "plan": biz.get("plan", "free"),
+        "appointment_settings": ({
+            "enabled": True,
+            "services": appt.get("services", []),
+            "working_hours": appt.get("working_hours", {}),
+        } if appt.get("enabled") else {"enabled": False}),
+        "timezone": biz.get("timezone", "UTC"),
+        "faqs": faqs,
+        "testimonials": biz.get("testimonials") or [],
+        "legal_docs": published_legal,
+        "platform_support_email": settings.get("support_email") or None,
+        "platform_company_name": settings.get("company_legal_name") or None,
     }

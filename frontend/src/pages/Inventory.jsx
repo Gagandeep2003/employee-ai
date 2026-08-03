@@ -73,7 +73,7 @@ export default function Inventory() {
             <UploadSimple size={14} /> {uploading ? "Uploading…" : "Upload CSV"}
           </label>
           {items.length > 0 && (
-            <button onClick={clearAll} data-testid="inventory-clear-btn" className="px-3 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive hover:border-destructive/50">
+            <button onClick={clearAll} aria-label="Clear all inventory" data-testid="inventory-clear-btn" className="px-3 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive hover:border-destructive/50">
               <Trash size={14} />
             </button>
           )}

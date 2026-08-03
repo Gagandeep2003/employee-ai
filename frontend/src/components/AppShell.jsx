@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api, setAuthToken } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { toast } from "sonner";
-import { Users, ChatCircleText, BookOpen, ChartLine, PaintBrush, CreditCard, Handshake, GearSix, ShieldCheck, SignOut, Buildings, House, CalendarCheck, EnvelopeSimple, X, Package } from "@phosphor-icons/react";
+import { Users, ChatCircleText, BookOpen, ChartLine, PaintBrush, CreditCard, Handshake, GearSix, ShieldCheck, SignOut, Buildings, House, CalendarCheck, EnvelopeSimple, X, Package, Lock } from "@phosphor-icons/react";
 
 export const BizCtx = createContext({ businesses: [], current: null, setCurrent: () => {} });
 export const useBiz = () => useContext(BizCtx);
@@ -41,6 +41,46 @@ function VerifyEmailBanner({ user }) {
   );
 }
 
+function LegalAcceptanceBanner() {
+  const [outstanding, setOutstanding] = useState([]);
+  const [accepting, setAccepting] = useState(false);
+
+  const refresh = () => api.get("/legal/acceptance/status").then(({ data }) => setOutstanding(data.outstanding || [])).catch(() => {});
+  useEffect(() => { refresh(); }, []);
+
+  if (!outstanding.length) return null;
+
+  const acceptAll = async () => {
+    setAccepting(true);
+    try {
+      for (const doc of outstanding) {
+        await api.post("/legal/acceptance/accept", { doc_type: doc.doc_type, version: doc.version });
+      }
+      toast.success("Thanks -- you're all set");
+      setOutstanding([]);
+    } catch {
+      toast.error("Couldn't record that -- please try again");
+    }
+    setAccepting(false);
+  };
+
+  return (
+    <div className="bg-primary/10 border-b border-primary/30 px-4 py-2 flex items-center justify-between text-xs flex-wrap gap-2" data-testid="legal-acceptance-banner">
+      <div className="flex items-center gap-2">
+        We've updated our {outstanding.map((d) => d.title).join(" and ")} -- please review and accept to continue.
+        {outstanding.map((d) => (
+          <a key={d.doc_type} href={`/legal/${d.doc_type}`} target="_blank" rel="noreferrer" className="underline hover:no-underline">
+            Read {d.title}
+          </a>
+        ))}
+      </div>
+      <button onClick={acceptAll} disabled={accepting} data-testid="accept-legal" className="px-3 py-1 rounded-md bg-primary text-primary-foreground shrink-0">
+        {accepting ? "…" : "I accept"}
+      </button>
+    </div>
+  );
+}
+
 export default function AppShell() {
   const { user } = useAuth();
   const nav = useNavigate();
@@ -74,6 +114,7 @@ export default function AppShell() {
     { to: "/billing", label: "Billing", Icon: CreditCard },
     { to: "/referrals", label: "Referrals", Icon: Handshake },
     { to: "/settings", label: "Settings", Icon: GearSix },
+    { to: "/security", label: "Security", Icon: Lock },
   ];
   const isAdmin = user?.role === "admin";
 
@@ -137,6 +178,7 @@ export default function AppShell() {
         </aside>
         <main className="flex-1 overflow-y-auto">
           <VerifyEmailBanner user={user} />
+          <LegalAcceptanceBanner />
           <Outlet />
         </main>
       </div>

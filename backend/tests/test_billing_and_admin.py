@@ -9,7 +9,7 @@ def test_plans_endpoint_public(client):
     r = client.get("/api/billing/plans")
     assert r.status_code == 200
     body = r.json()
-    assert set(body.keys()) == {"free", "starter", "pro"}
+    assert set(body.keys()) == {"free", "starter", "growth", "scale"}  # "pro" is a hidden legacy alias for "growth"
     assert body["free"]["price_inr"] == 0
 
 

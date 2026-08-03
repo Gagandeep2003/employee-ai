@@ -65,6 +65,11 @@ CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["http:
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip() or None
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+# Used for hybrid semantic search (embeddings.py) -- separate from the chat model above.
+# If this ever stops matching an available model on your account, embedding calls fail
+# closed and retrieval silently falls back to BM25-only; nothing breaks, search just gets
+# less precise until you fix the model name. Override if Google renames/retires this one.
+GEMINI_EMBEDDING_MODEL = os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001").strip()
 if IS_PRODUCTION and not GEMINI_API_KEY:
     _fail("GEMINI_API_KEY is required in production (get one at https://aistudio.google.com/apikey).")
 

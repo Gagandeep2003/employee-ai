@@ -120,7 +120,7 @@ Thanks!`);
               </div>
               <details className="mt-4">
                 <summary className="text-xs text-accent cursor-pointer flex items-center gap-1"><QrCode size={14} /> Show QR code</summary>
-                <img src={qrUrl} alt="QR" className="mt-3 rounded-md border border-border" />
+                <img src={qrUrl} alt="QR code linking to your chat page" className="mt-3 rounded-md border border-border" />
               </details>
             </div>
 
@@ -180,22 +180,43 @@ Thanks!`);
             <div className="bg-card border border-border rounded-lg p-6 space-y-4">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">Primary color</div>
-                <input type="color" value={w.primary_color} onChange={(e) => setW({ ...w, primary_color: e.target.value })} data-testid="widget-primary" className="h-10 w-20 rounded border border-border" />
+                <input type="color" value={w.primary_color} onChange={(e) => setW({ ...w, primary_color: e.target.value })} aria-label="Primary color" data-testid="widget-primary" className="h-10 w-20 rounded border border-border" />
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">Accent color</div>
-                <input type="color" value={w.accent_color} onChange={(e) => setW({ ...w, accent_color: e.target.value })} data-testid="widget-accent" className="h-10 w-20 rounded border border-border" />
+                <input type="color" value={w.accent_color} onChange={(e) => setW({ ...w, accent_color: e.target.value })} aria-label="Accent color" data-testid="widget-accent" className="h-10 w-20 rounded border border-border" />
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">Welcome message</div>
-                <textarea value={w.welcome_message} onChange={(e) => setW({ ...w, welcome_message: e.target.value })} data-testid="widget-welcome" rows={3} className="w-full px-3 py-2 rounded-md border border-border bg-background" />
+                <textarea value={w.welcome_message} onChange={(e) => setW({ ...w, welcome_message: e.target.value })} aria-label="Welcome message" data-testid="widget-welcome" rows={3} className="w-full px-3 py-2 rounded-md border border-border bg-background" />
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">Position</div>
-                <select value={w.position} onChange={(e) => setW({ ...w, position: e.target.value })} data-testid="widget-position" className="px-3 py-2 rounded-md border border-border bg-background">
+                <select value={w.position} onChange={(e) => setW({ ...w, position: e.target.value })} aria-label="Widget position" data-testid="widget-position" className="px-3 py-2 rounded-md border border-border bg-background">
                   <option value="bottom-right">Bottom right</option>
                   <option value="bottom-left">Bottom left</option>
                 </select>
+              </div>
+              <div className="border-t border-border pt-4 space-y-3">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Attention behavior</div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={w.teaser_enabled !== false} onChange={(e) => setW({ ...w, teaser_enabled: e.target.checked })} data-testid="widget-teaser-enabled" />
+                  Show a friendly nudge bubble if visitors haven't opened the chat
+                </label>
+                {w.teaser_enabled !== false && (
+                  <label className="flex items-center gap-2 text-sm pl-6">
+                    Wait
+                    <input type="number" min={1} max={60} value={w.teaser_delay_seconds ?? 4}
+                      onChange={(e) => setW({ ...w, teaser_delay_seconds: Math.max(1, parseInt(e.target.value, 10) || 4) })}
+                      data-testid="widget-teaser-delay" className="w-16 px-2 py-1 rounded-md border border-border bg-background text-center" />
+                    seconds before showing it
+                  </label>
+                )}
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={w.pulse_enabled !== false} onChange={(e) => setW({ ...w, pulse_enabled: e.target.checked })} data-testid="widget-pulse-enabled" />
+                  Gentle pulse/glow on the chat bubble to draw the eye
+                </label>
+                <p className="text-xs text-muted-foreground">Both automatically turn off for visitors whose device has "reduce motion" enabled.</p>
               </div>
               <label className={`flex items-center gap-2 text-sm ${current.plan === "free" ? "opacity-60" : ""}`}>
                 <input

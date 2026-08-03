@@ -1,27 +1,36 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 import secrets
 import urllib.parse
 
 import config
 from auth import (
-    create_user, authenticate, create_token, get_current_user,
+    create_user, authenticate, create_token, get_current_user, get_current_session_id,
+    ACCESS_TTL_MIN,
     create_reset_token, create_verify_token, decode_typed_token,
     reset_password as do_reset_password, verify_email as do_verify_email,
     create_mfa_pending_token, verify_totp_code, find_or_create_google_user,
+    mfa_setup_for, mfa_enable_for, mfa_disable_for,
 )
+import sessions as sessions_lib
 from db import db
 from ratelimit import limiter
-from email_sender import send_email
+from email_sender import send_email, send_new_device_login_email, send_welcome_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
+ACCESS_COOKIE_MAX_AGE = ACCESS_TTL_MIN * 60
+# The refresh cookie's browser-side max-age is just an upper bound / convenience for the
+# browser to stop sending an obviously-dead cookie -- the *authoritative* expiry is the
+# session document's expires_at (admin-tunable via platform_settings.refresh_token_ttl_days),
+# checked server-side on every /auth/refresh call.
+REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 60
+REFRESH_COOKIE_PATH = "/api/auth"
 
 
-def _set_session_cookie(response: Response, token: str):
+def _set_access_cookie(response: Response, token: str):
     response.set_cookie(
         key="session_token",
         value=token,
@@ -29,8 +38,25 @@ def _set_session_cookie(response: Response, token: str):
         secure=config.IS_PRODUCTION,
         samesite="none" if config.IS_PRODUCTION else "lax",
         path="/",
-        max_age=COOKIE_MAX_AGE,
+        max_age=ACCESS_COOKIE_MAX_AGE,
     )
+
+
+def _set_refresh_cookie(response: Response, token: str):
+    response.set_cookie(
+        key="refresh_token",
+        value=token,
+        httponly=True,
+        secure=config.IS_PRODUCTION,
+        samesite="none" if config.IS_PRODUCTION else "lax",
+        path=REFRESH_COOKIE_PATH,
+        max_age=REFRESH_COOKIE_MAX_AGE,
+    )
+
+
+def _clear_auth_cookies(response: Response):
+    response.delete_cookie("session_token", path="/")
+    response.delete_cookie("refresh_token", path=REFRESH_COOKIE_PATH)
 
 
 def _frontend_url(path: str) -> str:
@@ -46,6 +72,31 @@ async def _send_verification_email(user: dict):
         f"Hi {user.get('name') or ''},\n\nPlease confirm your email address:\n{link}\n\n"
         "If you didn't create this account, you can ignore this email.",
     )
+
+
+async def _finish_login(response: Response, request: Request, user: dict, method: str = "password") -> str:
+    """Common tail of every flow that ends in an issued session (password login,
+    MFA-verified login, Google OAuth): creates a session/device record, sets both
+    cookies, records the login event, and fires a new-device alert email if this
+    device has never been seen for this user before. Returns the new session id."""
+    ua = request.headers.get("user-agent") if request else None
+    device_name = sessions_lib.describe_device(ua)
+    is_new = await sessions_lib.is_new_device(user["user_id"], device_name)
+
+    session_id, access_token, refresh_token = await sessions_lib.create_session(user["user_id"], user["email"], request)
+    _set_access_cookie(response, access_token)
+    _set_refresh_cookie(response, refresh_token)
+    await sessions_lib.record_login_event(request, user["user_id"], user["email"], "success", method=method)
+
+    if is_new:
+        try:
+            await send_new_device_login_email(
+                user["email"], user.get("name"), device_name,
+                sessions_lib.client_ip(request), sessions_lib._now_iso(),
+            )
+        except Exception:
+            pass  # never block login on an email provider hiccup
+    return session_id
 
 
 class SignupInput(BaseModel):
@@ -64,15 +115,15 @@ class LoginInput(BaseModel):
 @limiter.limit("10/hour")
 async def signup(request: Request, payload: SignupInput, response: Response):
     user = await create_user(payload.email, payload.password, payload.name, payload.referral_code)
-    token = create_token(user["user_id"], user["email"])
-    _set_session_cookie(response, token)
+    await _finish_login(response, request, user, method="password")
     try:
         await _send_verification_email(user)
+        await send_welcome_email(user["email"], user.get("name"))
     except Exception:
         pass  # never block signup on an email provider hiccup
     # NOTE: the raw token is intentionally NOT included in this response body.
     # Storing JWTs in localStorage/JS-reachable storage defeats the point of an
-    # httpOnly cookie (any XSS can read localStorage). The cookie set above is
+    # httpOnly cookie (any XSS can read localStorage). The cookies set above are
     # sufficient for the SPA; the one deliberate exception is admin impersonation
     # (routers/admin.py), which needs a token the frontend can hand off explicitly.
     return _public_user(user)
@@ -81,14 +132,21 @@ async def signup(request: Request, payload: SignupInput, response: Response):
 @router.post("/login")
 @limiter.limit("10/minute")
 async def login(request: Request, payload: LoginInput, response: Response):
-    user = await authenticate(payload.email, payload.password)
+    try:
+        user = await authenticate(payload.email, payload.password)
+    except HTTPException as e:
+        outcome = "locked" if e.status_code == 423 else "failed_password"
+        existing = await db.users.find_one({"email": payload.email.strip().lower()}, {"_id": 0, "user_id": 1})
+        await sessions_lib.record_login_event(request, existing["user_id"] if existing else None,
+                                              payload.email, outcome, method="password")
+        raise
     full = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     if full and full.get("mfa_enabled"):
         # Password was correct, but a second factor is required before a session
-        # is issued -- no session_token cookie is set at this point.
+        # is issued -- no cookies are set at this point.
+        await sessions_lib.record_login_event(request, user["user_id"], user["email"], "mfa_required", method="password")
         return {"mfa_required": True, "mfa_token": create_mfa_pending_token(user["user_id"])}
-    token = create_token(user["user_id"], user["email"])
-    _set_session_cookie(response, token)
+    await _finish_login(response, request, user, method="password")
     return _public_user(user)
 
 
@@ -105,11 +163,110 @@ async def mfa_verify(request: Request, payload: MfaVerifyInput, response: Respon
     if not user or not user.get("mfa_enabled") or not user.get("mfa_secret"):
         raise HTTPException(400, "MFA is not enabled on this account")
     if not verify_totp_code(user["mfa_secret"], payload.code):
+        await sessions_lib.record_login_event(request, user["user_id"], user["email"], "mfa_failed", method="mfa")
         raise HTTPException(401, "Incorrect code")
-    session = create_token(user["user_id"], user["email"])
-    _set_session_cookie(response, session)
     user.pop("_id", None); user.pop("password_hash", None); user.pop("mfa_secret", None)
+    await _finish_login(response, request, user, method="mfa")
     return _public_user(user)
+
+
+# ---------------------------------------------------------------------------
+# Refresh-token rotation & session/device management
+# ---------------------------------------------------------------------------
+@router.post("/refresh")
+@limiter.limit("60/minute")
+async def refresh(request: Request, response: Response, refresh_token: Optional[str] = None):
+    from fastapi import Cookie
+    raw = request.cookies.get("refresh_token")
+    if not raw:
+        raise HTTPException(401, "No refresh token")
+    try:
+        session_id, user_id, access_token, new_refresh = await sessions_lib.rotate_refresh_token(raw, request)
+    except sessions_lib.RefreshTokenReused:
+        # Token theft signal: the session is already revoked by rotate_refresh_token.
+        # Force a clean re-login on this device rather than silently issuing a new pair.
+        _clear_auth_cookies(response)
+        raise HTTPException(401, "This session was invalidated for security reasons -- please sign in again")
+    except sessions_lib.RefreshTokenInvalid:
+        _clear_auth_cookies(response)
+        raise HTTPException(401, "Session expired -- please sign in again")
+    _set_access_cookie(response, access_token)
+    _set_refresh_cookie(response, new_refresh)
+    return {"ok": True}
+
+
+@router.get("/sessions")
+async def list_sessions(user=Depends(get_current_user), current_sid: Optional[str] = Depends(get_current_session_id)):
+    return await sessions_lib.list_sessions(user["user_id"], current_sid)
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(session_id: str, response: Response, user=Depends(get_current_user),
+                         current_sid: Optional[str] = Depends(get_current_session_id)):
+    session = await db.sessions.find_one({"id": session_id, "user_id": user["user_id"]})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    await sessions_lib.revoke_session(session_id, reason="user")
+    if session_id == current_sid:
+        _clear_auth_cookies(response)
+    return {"ok": True, "was_current_device": session_id == current_sid}
+
+
+class RevokeAllInput(BaseModel):
+    include_current: bool = False
+
+
+@router.post("/sessions/revoke-all")
+async def revoke_all_sessions(payload: RevokeAllInput, response: Response, user=Depends(get_current_user),
+                              current_sid: Optional[str] = Depends(get_current_session_id)):
+    except_sid = None if payload.include_current else current_sid
+    count = await sessions_lib.revoke_all_sessions(user["user_id"], except_session_id=except_sid, reason="user")
+    if payload.include_current:
+        _clear_auth_cookies(response)
+    return {"ok": True, "revoked": count}
+
+
+@router.get("/login-history")
+async def login_history(user=Depends(get_current_user)):
+    return await sessions_lib.list_login_history(user["user_id"])
+
+
+@router.get("/security-overview")
+async def security_overview(user=Depends(get_current_user)):
+    return await sessions_lib.security_overview(user["user_id"])
+
+
+# ---------------------------------------------------------------------------
+# Two-factor authentication (TOTP) -- available to every account, not just admins.
+# Impersonation makes admin accounts especially high-value, but any owner's account
+# is a real target too (billing, customer data, the widget on their live site).
+# ---------------------------------------------------------------------------
+@router.post("/mfa/setup")
+@limiter.limit("10/hour")
+async def auth_mfa_setup(request: Request, user=Depends(get_current_user)):
+    return await mfa_setup_for(user["user_id"], user["email"])
+
+
+class AuthMfaEnableIn(BaseModel):
+    code: str
+
+
+@router.post("/mfa/enable")
+@limiter.limit("10/hour")
+async def auth_mfa_enable(request: Request, payload: AuthMfaEnableIn, user=Depends(get_current_user)):
+    await mfa_enable_for(user["user_id"], payload.code)
+    return {"ok": True}
+
+
+class AuthMfaDisableIn(BaseModel):
+    password: str
+
+
+@router.post("/mfa/disable")
+@limiter.limit("10/hour")
+async def auth_mfa_disable(request: Request, payload: AuthMfaDisableIn, user=Depends(get_current_user)):
+    await mfa_disable_for(user["user_id"], payload.password)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +280,7 @@ async def mfa_verify(request: Request, payload: MfaVerifyInput, response: Respon
 # cookie -> Google redirects back to /google/callback -> we check the cookie
 # matches the returned state (CSRF protection for the flow), exchange the
 # code for a token, fetch the profile, find-or-create the user, and redirect
-# to the frontend with the session cookie already set.
+# to the frontend with the session cookies already set.
 # ---------------------------------------------------------------------------
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -202,10 +359,9 @@ async def google_callback(request: Request, code: str = None, state: str = None,
         resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
         return resp
 
-    session_token = create_token(user["user_id"], user["email"])
     resp = RedirectResponse(_frontend_url("/dashboard"))
     resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
-    _set_session_cookie(resp, session_token)
+    await _finish_login(resp, request, user, method="google")
     return resp
 
 
@@ -215,8 +371,10 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie("session_token", path="/")
+async def logout(response: Response, request: Request, current_sid: Optional[str] = Depends(get_current_session_id)):
+    if current_sid:
+        await sessions_lib.revoke_session(current_sid, reason="logout")
+    _clear_auth_cookies(response)
     return {"ok": True}
 
 
@@ -249,7 +407,11 @@ class ResetPasswordInput(BaseModel):
 @router.post("/reset-password")
 @limiter.limit("10/hour")
 async def reset_password_endpoint(request: Request, payload: ResetPasswordInput):
-    await do_reset_password(payload.token, payload.new_password)
+    user_id = await do_reset_password(payload.token, payload.new_password)
+    # A password reset is exactly the moment to assume the account may have been
+    # compromised (or the owner is deliberately locking out a stolen session) --
+    # kill every other device's session so the new password is the only way back in.
+    await sessions_lib.revoke_all_sessions(user_id, reason="password_reset")
     return {"ok": True}
 
 

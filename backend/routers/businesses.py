@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, available_timezones
 
 from auth import get_current_user
 from db import db
 from crawler import crawl_site
-from retrieval import tokenize, invalidate
+from retrieval import invalidate, index_chunks
 from usage import current_period
-from llm import generate_business_snapshot
+from llm import generate_business_snapshot, extract_appointment_settings
 from platform_settings import get_settings as get_platform_settings, get_plan_limit
 from routers.billing import PLANS
 from freshness import touch as touch_knowledge
@@ -21,6 +22,7 @@ DEFAULT_APPOINTMENT_SETTINGS = {
     "services": [],  # [{"name": str, "duration_minutes": int}]
     "working_hours": {d: None for d in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]},
     "slot_interval_minutes": 30,
+    "holidays": [],  # ["YYYY-MM-DD", ...] -- specific closed dates regardless of normal working_hours
 }
 
 DEFAULT_QUICK_FACTS = {
@@ -29,6 +31,14 @@ DEFAULT_QUICK_FACTS = {
     "announcement": "",
     "updated_at": None,
 }
+
+
+def _validate_tz(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    if v not in available_timezones():
+        raise ValueError(f"'{v}' isn't a recognized IANA timezone (e.g. 'Asia/Kolkata', 'America/New_York', 'UTC')")
+    return v
 
 
 class BusinessCreate(BaseModel):
@@ -40,6 +50,8 @@ class BusinessCreate(BaseModel):
     country: Optional[str] = None
     language: str = "en"
     timezone: str = "UTC"
+
+    _validate_timezone = field_validator("timezone")(_validate_tz)
 
 
 class BusinessUpdate(BaseModel):
@@ -53,12 +65,15 @@ class BusinessUpdate(BaseModel):
     timezone: Optional[str] = None
     widget: Optional[dict] = None
 
+    _validate_timezone = field_validator("timezone")(_validate_tz)
+
 
 class AppointmentSettingsIn(BaseModel):
     enabled: bool = False
     services: List[Dict[str, Any]] = Field(default_factory=list)
     working_hours: Dict[str, Optional[List[str]]] = Field(default_factory=dict)
     slot_interval_minutes: int = 30
+    holidays: List[str] = Field(default_factory=list)
 
 
 def _knowledge_score(chunk_count: int, biz: dict) -> int:
@@ -87,6 +102,22 @@ async def _generate_snapshot(business_id: str):
         )
 
 
+async def _extract_appointment_draft(business_id: str, biz: dict, docs: list):
+    combined = "\n\n".join(d["text"] for d in docs)[:15000]
+    if not combined.strip():
+        return
+    try:
+        draft = await extract_appointment_settings(biz["name"], biz.get("category"), combined)
+    except Exception:
+        return
+    has_hours = any(v for v in (draft.get("working_hours") or {}).values())
+    if not draft or (not has_hours and not draft.get("services")):
+        return  # nothing worth showing the owner -- don't manufacture an empty review step
+    await db.businesses.update_one({"business_id": business_id}, {"$set": {
+        "appointment_settings_draft": {**draft, "extracted_at": datetime.now(timezone.utc).isoformat()},
+    }})
+
+
 async def _run_crawl(business_id: str, website: str):
     try:
         await db.businesses.update_one({"business_id": business_id},
@@ -100,12 +131,9 @@ async def _run_crawl(business_id: str, website: str):
                 "text": text,
                 "source": url,
                 "source_title": title,
-                "tokens": tokenize(text),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
-        if docs:
-            await db.knowledge_chunks.insert_many(docs)
-        invalidate(business_id)
+        await index_chunks(docs)
         biz = await db.businesses.find_one({"business_id": business_id}, {"_id": 0})
         total_chunks = await db.knowledge_chunks.count_documents({"business_id": business_id})
         score = _knowledge_score(total_chunks, biz or {})
@@ -114,6 +142,10 @@ async def _run_crawl(business_id: str, website: str):
                                                  "knowledge_score": score}})
         await touch_knowledge(business_id)
         await _generate_snapshot(business_id)
+        if docs and not (biz or {}).get("appointment_settings", {}).get("enabled"):
+            # Only worth extracting a draft if booking isn't already configured -- an owner
+            # who already set this up by hand doesn't need it silently second-guessed.
+            await _extract_appointment_draft(business_id, biz or {"name": "", "category": None}, docs)
     except Exception:
         await db.businesses.update_one({"business_id": business_id},
                                        {"$set": {"crawl_status": "error", "crawl_progress": 0}})
@@ -233,6 +265,12 @@ async def set_appointment_settings(business_id: str, payload: AppointmentSetting
         raise HTTPException(404, "Not found")
     valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
     hours = {d: payload.working_hours.get(d) for d in valid_days}
+    holidays = []
+    for h in payload.holidays[:100]:
+        try:
+            holidays.append(datetime.strptime(h, "%Y-%m-%d").strftime("%Y-%m-%d"))
+        except ValueError:
+            raise HTTPException(400, f"Invalid holiday date: '{h}' (expected YYYY-MM-DD)")
     settings = {
         "enabled": payload.enabled,
         "services": [{"name": str(s.get("name", "")).strip()[:80],
@@ -240,9 +278,59 @@ async def set_appointment_settings(business_id: str, payload: AppointmentSetting
                      for s in payload.services if str(s.get("name", "")).strip()][:30],
         "working_hours": hours,
         "slot_interval_minutes": max(5, min(240, payload.slot_interval_minutes)),
+        "holidays": sorted(set(holidays)),
     }
     await db.businesses.update_one({"business_id": business_id}, {"$set": {"appointment_settings": settings}})
     return settings
+
+
+@router.get("/{business_id}/appointments/settings/draft")
+async def get_appointment_settings_draft(business_id: str, user=Depends(get_current_user)):
+    """The crawler-extracted best-guess (working hours, services, holidays) awaiting owner
+    review -- never applied automatically. None if nothing was extracted (or appointment
+    booking was already configured by hand when the crawl ran)."""
+    biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]}, {"_id": 0})
+    if not biz:
+        raise HTTPException(404, "Not found")
+    return biz.get("appointment_settings_draft")
+
+
+@router.post("/{business_id}/appointments/settings/publish-draft")
+async def publish_appointment_settings_draft(business_id: str, user=Depends(get_current_user)):
+    """Applies the extracted draft as-is. For anything that needs correcting first, use
+    PUT .../appointments/settings directly (the owner reviews the draft, edits it in the
+    UI, and that PUT call is the "publish" -- this endpoint is just the one-click "looks
+    right, use it" path for when it doesn't need any changes)."""
+    biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]})
+    if not biz:
+        raise HTTPException(404, "Not found")
+    draft = biz.get("appointment_settings_draft")
+    if not draft:
+        raise HTTPException(404, "No draft to publish")
+    valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    settings = {
+        "enabled": True,
+        "services": [{"name": str(s.get("name", "")).strip()[:80],
+                      "duration_minutes": max(5, min(480, int(s.get("duration_minutes", 30))))}
+                     for s in draft.get("services", []) if str(s.get("name", "")).strip()][:30],
+        "working_hours": {d: (draft.get("working_hours") or {}).get(d) for d in valid_days},
+        "slot_interval_minutes": 30,
+        "holidays": sorted(set(draft.get("holidays") or [])),
+    }
+    updates = {"appointment_settings": settings, "appointment_settings_draft": None}
+    if draft.get("timezone_guess") and draft["timezone_guess"] in available_timezones():
+        updates["timezone"] = draft["timezone_guess"]
+    await db.businesses.update_one({"business_id": business_id}, {"$set": updates})
+    return settings
+
+
+@router.delete("/{business_id}/appointments/settings/draft")
+async def dismiss_appointment_settings_draft(business_id: str, user=Depends(get_current_user)):
+    biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]})
+    if not biz:
+        raise HTTPException(404, "Not found")
+    await db.businesses.update_one({"business_id": business_id}, {"$set": {"appointment_settings_draft": None}})
+    return {"ok": True}
 
 
 @router.get("/{business_id}/appointments")
@@ -299,6 +387,34 @@ async def set_quick_facts(business_id: str, payload: QuickFactsIn, user=Depends(
     await db.businesses.update_one({"business_id": business_id}, {"$set": {"quick_facts": facts}})
     await touch_knowledge(business_id)
     return facts
+
+
+class Testimonial(BaseModel):
+    quote: str = Field(min_length=1, max_length=500)
+    author: str = Field(min_length=1, max_length=100)
+    role: Optional[str] = Field(default=None, max_length=100)  # e.g. "Regular customer", "Verified client"
+
+
+class TestimonialsIn(BaseModel):
+    testimonials: List[Testimonial] = Field(default_factory=list, max_length=12)
+
+
+@router.get("/{business_id}/testimonials")
+async def get_testimonials(business_id: str, user=Depends(get_current_user)):
+    biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]}, {"_id": 0})
+    if not biz:
+        raise HTTPException(404, "Not found")
+    return biz.get("testimonials") or []
+
+
+@router.put("/{business_id}/testimonials")
+async def set_testimonials(business_id: str, payload: TestimonialsIn, user=Depends(get_current_user)):
+    biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]})
+    if not biz:
+        raise HTTPException(404, "Not found")
+    items = [t.model_dump() for t in payload.testimonials]
+    await db.businesses.update_one({"business_id": business_id}, {"$set": {"testimonials": items}})
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -372,14 +488,13 @@ async def upload_inventory(business_id: str, file: UploadFile = File(...), user=
             "source": file.filename,
             "source_title": f"Inventory: {it['name']}",
             "source_type": "inventory",
-            "tokens": tokenize(text),
             "created_at": now,
         })
 
     # Replace previous inventory entirely -- re-uploading IS the update workflow.
     await db.knowledge_chunks.delete_many({"business_id": business_id, "source_type": "inventory"})
-    await db.knowledge_chunks.insert_many(docs)
     invalidate(business_id)
+    await index_chunks(docs)
     await touch_knowledge(business_id)
     return {"ok": True, "items_loaded": len(docs)}
 

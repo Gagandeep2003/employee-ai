@@ -29,3 +29,34 @@ api.interceptors.request.use((config) => {
   if (t) config.headers.Authorization = `Bearer ${t}`;
   return config;
 });
+
+// Paths where a 401 is a meaningful, final answer (wrong password, no session yet,
+// or the refresh call itself) rather than "the access token expired mid-session" --
+// these must NOT trigger a refresh-and-retry, or a wrong password would silently
+// turn into an infinite refresh loop.
+const NO_REFRESH_RETRY_PATHS = ["/auth/login", "/auth/signup", "/auth/refresh", "/auth/mfa/verify"];
+
+let refreshInFlight = null;
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config || {};
+    const status = error.response?.status;
+    const path = (original.url || "").split("?")[0];
+    const skip = getAuthToken() || original._retried || NO_REFRESH_RETRY_PATHS.some((p) => path.startsWith(p));
+
+    if (status !== 401 || skip) return Promise.reject(error);
+
+    original._retried = true;
+    try {
+      if (!refreshInFlight) {
+        refreshInFlight = api.post("/auth/refresh").finally(() => { refreshInFlight = null; });
+      }
+      await refreshInFlight;
+      return api(original);
+    } catch {
+      return Promise.reject(error); // refresh itself failed -- surface the original 401
+    }
+  }
+);

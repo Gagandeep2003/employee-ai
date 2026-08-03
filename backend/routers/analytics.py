@@ -17,6 +17,13 @@ async def _verify(business_id: str, user: dict):
 @router.get("/business/{business_id}/summary")
 async def summary(business_id: str, user=Depends(get_current_user)):
     biz = await _verify(business_id, user)
+    return await compute_summary(business_id, biz)
+
+
+async def compute_summary(business_id: str, biz: dict) -> dict:
+    """The actual metrics computation, shared by the owner-facing route above and the
+    scoped API-key surface in routers/public_api.py (analytics:read) -- one implementation,
+    two authorization paths."""
     total_conv = await db.conversations.count_documents({"business_id": business_id})
     total_msgs = await db.messages.count_documents({"business_id": business_id})
     unanswered = await db.conversations.count_documents({"business_id": business_id, "unanswered": True})

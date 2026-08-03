@@ -8,7 +8,7 @@ export default function KnowledgeBase() {
   const { current } = useBiz();
   const [chunks, setChunks] = useState([]);
   const [score, setScore] = useState(null);
-  const [manual, setManual] = useState({ title: "", text: "" });
+  const [manual, setManual] = useState({ title: "", text: "", kind: "note" });
   const [unans, setUnans] = useState([]);
   const fileInput = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -40,7 +40,7 @@ export default function KnowledgeBase() {
     try {
       await api.post("/knowledge/manual", { business_id: current.business_id, ...manual });
       toast.success("Added to knowledge base");
-      setManual({ title: "", text: "" });
+      setManual({ title: "", text: "", kind: "note" });
       refresh();
     } catch { toast.error("Failed"); }
   };
@@ -97,9 +97,22 @@ export default function KnowledgeBase() {
           </button>
         </div>
         <div className="bg-card border border-border rounded-lg p-6">
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-3">Add manually</div>
-          <input placeholder="Title (e.g. Refund policy)" data-testid="kb-manual-title" value={manual.title} onChange={(e) => setManual({ ...manual, title: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm mb-2" />
-          <textarea placeholder="Answer or content…" data-testid="kb-manual-text" value={manual.text} onChange={(e) => setManual({ ...manual, text: e.target.value })} rows={4} className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm" />
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Add manually</div>
+            <div className="flex rounded-md border border-border overflow-hidden text-xs">
+              <button type="button" onClick={() => setManual({ ...manual, kind: "note" })} data-testid="kb-kind-note"
+                className={`px-2.5 py-1 transition-colors ${manual.kind === "note" ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}>
+                Note
+              </button>
+              <button type="button" onClick={() => setManual({ ...manual, kind: "faq" })} data-testid="kb-kind-faq"
+                className={`px-2.5 py-1 transition-colors ${manual.kind === "faq" ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}>
+                FAQ
+              </button>
+            </div>
+          </div>
+          <input placeholder={manual.kind === "faq" ? "Question (e.g. Do you offer refunds?)" : "Title (e.g. Refund policy)"} aria-label={manual.kind === "faq" ? "Question" : "Title"} data-testid="kb-manual-title" value={manual.title} onChange={(e) => setManual({ ...manual, title: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm mb-2" />
+          <textarea placeholder={manual.kind === "faq" ? "Answer…" : "Answer or content…"} aria-label={manual.kind === "faq" ? "Answer" : "Content"} data-testid="kb-manual-text" value={manual.text} onChange={(e) => setManual({ ...manual, text: e.target.value })} rows={4} className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm" />
+          <div className="text-xs text-muted-foreground mt-1.5">{manual.kind === "faq" ? "FAQs are prioritized higher than general notes when your AI answers questions." : "General knowledge -- for a specific Q&A pair, use FAQ instead."}</div>
           <button onClick={addManual} data-testid="kb-manual-add" className="mt-3 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors text-sm">Add to knowledge</button>
         </div>
       </div>
@@ -112,7 +125,7 @@ export default function KnowledgeBase() {
             {unans.slice(0, 6).map((u) => (
               <li key={u.conversation_id} className="flex items-center justify-between gap-3">
                 <div className="text-sm">{u.question}</div>
-                <button onClick={() => setManual({ title: u.question, text: "" })} className="text-xs text-accent hover:underline">Answer</button>
+                <button onClick={() => setManual({ title: u.question, text: "", kind: "faq" })} className="text-xs text-accent hover:underline">Answer</button>
               </li>
             ))}
           </ul>
@@ -126,10 +139,13 @@ export default function KnowledgeBase() {
           {chunks.map((c) => (
             <div key={c.id} className="p-4 flex gap-3">
               <div className="flex-1">
-                <div className="text-xs text-accent uppercase tracking-[0.15em] mb-1">{c.source_title || c.source}</div>
+                <div className="text-xs text-accent uppercase tracking-[0.15em] mb-1 flex items-center gap-2">
+                  {c.source_title || c.source}
+                  {c.source_type === "faq" && <span className="text-[10px] px-1.5 py-0.5 rounded border border-accent text-accent normal-case tracking-normal">FAQ</span>}
+                </div>
                 <div className="text-sm text-foreground/90 line-clamp-3">{c.text}</div>
               </div>
-              <button onClick={() => del(c.id)} data-testid={`del-chunk-${c.id}`} className="text-muted-foreground hover:text-destructive"><Trash size={16} /></button>
+              <button onClick={() => del(c.id)} aria-label="Delete this knowledge entry" data-testid={`del-chunk-${c.id}`} className="text-muted-foreground hover:text-destructive"><Trash size={16} /></button>
             </div>
           ))}
           {!chunks.length && <div className="p-8 text-sm text-muted-foreground text-center">No knowledge yet. Upload a file or paste your website URL in Settings.</div>}

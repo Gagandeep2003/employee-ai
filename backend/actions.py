@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from db import db
-from retrieval import invalidate, tokenize
+from retrieval import index_chunks
 
 # Regex to pull the JSON block out of the LLM's reply
 ACTION_RE = re.compile(r"<action>\s*(\{.*?\})\s*</action>", re.DOTALL)
@@ -107,13 +107,11 @@ async def execute_action(business_id: str, action: dict) -> dict:
             text = (action.get("text") or "").strip()
             if len(text) < 5:
                 return {"ok": False, "error": "Text too short", "action": atype}
-            await db.knowledge_chunks.insert_one({
+            await index_chunks([{
                 "id": str(uuid.uuid4()), "business_id": business_id,
                 "text": text, "source": "manual", "source_title": title,
-                "tokens": tokenize(text),
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            invalidate(business_id)
+            }])
             return {"ok": True, "result": {"title": title}, "action": atype}
 
         if atype == "answer_unanswered":
@@ -122,13 +120,11 @@ async def execute_action(business_id: str, action: dict) -> dict:
             if not q or not a:
                 return {"ok": False, "error": "question and answer required", "action": atype}
             combined = f"Q: {q}\nA: {a}"
-            await db.knowledge_chunks.insert_one({
+            await index_chunks([{
                 "id": str(uuid.uuid4()), "business_id": business_id,
-                "text": combined, "source": "manual", "source_title": q[:80],
-                "tokens": tokenize(combined),
+                "text": combined, "source": "manual", "source_title": q[:80], "source_type": "faq",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            invalidate(business_id)
+            }])
             return {"ok": True, "result": {"question": q}, "action": atype}
 
         if atype == "list_knowledge":

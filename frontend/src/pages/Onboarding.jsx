@@ -163,8 +163,8 @@ function ReviewStep({ biz, onDone }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">{c.text}</div>
                   <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => startEdit(c)} data-testid={`edit-chunk-${c.id}`} className="text-muted-foreground hover:text-foreground"><PencilSimple size={14} /></button>
-                    <button onClick={() => deleteChunk(c.id)} data-testid={`delete-chunk-${c.id}`} className="text-muted-foreground hover:text-destructive"><Trash size={14} /></button>
+                    <button onClick={() => startEdit(c)} aria-label="Edit this entry" data-testid={`edit-chunk-${c.id}`} className="text-muted-foreground hover:text-foreground"><PencilSimple size={14} /></button>
+                    <button onClick={() => deleteChunk(c.id)} aria-label="Delete this entry" data-testid={`delete-chunk-${c.id}`} className="text-muted-foreground hover:text-destructive"><Trash size={14} /></button>
                   </div>
                 </div>
               )}
@@ -175,10 +175,10 @@ function ReviewStep({ biz, onDone }) {
         <div className="mt-4 pt-4 border-t border-border space-y-2">
           <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Add something it missed</div>
           <input value={manual.title} onChange={(e) => setManual((m) => ({ ...m, title: e.target.value }))}
-            placeholder="Title, e.g. Refund policy" data-testid="ob-manual-title"
+            placeholder="Title, e.g. Refund policy" aria-label="Title" data-testid="ob-manual-title"
             className="w-full text-sm px-3 py-2 rounded-md border border-border bg-background" />
           <textarea value={manual.text} onChange={(e) => setManual((m) => ({ ...m, text: e.target.value }))}
-            placeholder="What should the AI know?" rows={2} data-testid="ob-manual-text"
+            placeholder="What should the AI know?" aria-label="Content" rows={2} data-testid="ob-manual-text"
             className="w-full text-sm px-3 py-2 rounded-md border border-border bg-background" />
           <button onClick={addManual} data-testid="ob-manual-add" className="text-xs px-3 py-2 rounded-md border border-border hover:bg-secondary">Add</button>
         </div>

@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from auth import get_current_user
 from db import db
 from storage import put_object, APP_NAME
-from retrieval import tokenize, invalidate
+from retrieval import index_chunks, tokenize, invalidate
+from embeddings import embed_texts, TASK_DOCUMENT
 from platform_settings import get_settings as get_platform_settings
 from freshness import touch as touch_knowledge
 
@@ -18,6 +19,7 @@ class ManualEntry(BaseModel):
     business_id: str
     title: str
     text: str
+    kind: Optional[str] = "note"  # "note" | "faq" -- see retrieval.classify_tier
 
 
 async def _verify_ownership(business_id: str, user: dict):
@@ -29,13 +31,20 @@ async def _verify_ownership(business_id: str, user: dict):
 
 def _chunk_text(text: str, size: int = 700, overlap: int = 80) -> List[str]:
     words = text.split()
+    if not words:
+        return []
     out = []
     i = 0
     while i < len(words):
-        c = " ".join(words[i:i + size])
-        if len(c.strip()) > 40:
+        c = " ".join(words[i:i + size]).strip()
+        if c:
             out.append(c)
         i += size - overlap
+    # Drop a tiny leftover tail fragment (e.g. 3 stray words from the overlap window at the
+    # end of a long document) -- but never when it's the *only* chunk, since that would silently
+    # discard a short manual entry or short crawled page instead of just trimming noise off a long one.
+    if len(out) > 1 and len(out[-1]) <= 40:
+        out.pop()
     return out
 
 
@@ -57,23 +66,24 @@ def _extract_bytes(filename: str, data: bytes) -> str:
 @router.post("/manual")
 async def add_manual(payload: ManualEntry, user=Depends(get_current_user)):
     await _verify_ownership(payload.business_id, user)
+    kind = payload.kind if payload.kind in ("note", "faq") else "note"
     chunks = _chunk_text(payload.text)
     docs = []
     for c in chunks:
-        docs.append({
+        doc = {
             "id": str(uuid.uuid4()),
             "business_id": payload.business_id,
             "text": c,
             "source": "manual",
             "source_title": payload.title,
-            "tokens": tokenize(c),
             "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    if docs:
-        await db.knowledge_chunks.insert_many(docs)
-    invalidate(payload.business_id)
+        }
+        if kind == "faq":
+            doc["source_type"] = "faq"
+        docs.append(doc)
+    added = await index_chunks(docs)
     await touch_knowledge(payload.business_id)
-    return {"added": len(docs)}
+    return {"added": added}
 
 
 @router.post("/upload")
@@ -112,14 +122,11 @@ async def upload_file(business_id: str = Form(...), file: UploadFile = File(...)
             "text": c,
             "source": f"file:{file_id}",
             "source_title": file.filename,
-            "tokens": tokenize(c),
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-    if docs:
-        await db.knowledge_chunks.insert_many(docs)
-    invalidate(business_id)
+    added = await index_chunks(docs)
     await touch_knowledge(business_id)
-    return {"file_id": file_id, "chunks": len(docs), "filename": file.filename}
+    return {"file_id": file_id, "chunks": added, "filename": file.filename}
 
 
 @router.get("/{business_id}/chunks")
@@ -163,7 +170,11 @@ async def edit_chunk(chunk_id: str, payload: ChunkEdit, user=Depends(get_current
     text = payload.text.strip()
     if len(text) < 5:
         raise HTTPException(400, "Text too short")
-    await db.knowledge_chunks.update_one({"id": chunk_id}, {"$set": {"text": text, "tokens": tokenize(text)}})
+    update = {"text": text, "tokens": tokenize(text)}
+    vectors = await embed_texts([text], task_type=TASK_DOCUMENT)
+    if vectors and vectors[0] is not None:
+        update["embedding"] = vectors[0]
+    await db.knowledge_chunks.update_one({"id": chunk_id}, {"$set": update})
     invalidate(doc["business_id"])
     await touch_knowledge(doc["business_id"])
     return {"ok": True}

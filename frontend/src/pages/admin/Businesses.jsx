@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, setAuthToken } from "../../lib/api";
 import { toast } from "sonner";
 import { H1, Card, Search, Row, Th, Td, Btn, Pill, fmtDate } from "./_ui";
+import { DownloadSimple } from "@phosphor-icons/react";
 
 export default function Businesses() {
   const [items, setItems] = useState([]);
@@ -43,6 +44,13 @@ export default function Businesses() {
     } catch { toast.error("Failed"); }
   };
 
+  const exportBusinesses = (format) => {
+    const params = new URLSearchParams({ format, ...(q ? { q } : {}), ...(plan ? { plan } : {}) });
+    window.open(`${api.defaults.baseURL}/admin/businesses?${params}`, "_blank");
+  };
+
+  const healthTone = (score) => (score >= 70 ? "ok" : score >= 40 ? "default" : "danger");
+
   return (
     <div className="p-6 md:p-8 space-y-4">
       <H1 eyebrow="Master directory" title="Businesses">
@@ -51,8 +59,13 @@ export default function Businesses() {
           <option value="">All plans</option>
           <option value="free">Free</option>
           <option value="starter">Starter</option>
-          <option value="pro">Pro</option>
+          <option value="growth">Growth</option>
+          <option value="scale">Scale</option>
+          <option value="pro">Pro (legacy)</option>
         </select>
+        <Btn variant="ghost" onClick={() => exportBusinesses("csv")} testid="export-businesses-csv"><DownloadSimple size={12} className="inline mr-1" />CSV</Btn>
+        <Btn variant="ghost" onClick={() => exportBusinesses("xlsx")} testid="export-businesses-xlsx"><DownloadSimple size={12} className="inline mr-1" />Excel</Btn>
+        <Btn variant="ghost" onClick={() => exportBusinesses("pdf")} testid="export-businesses-pdf"><DownloadSimple size={12} className="inline mr-1" />PDF</Btn>
       </H1>
 
       <Card>
@@ -60,7 +73,7 @@ export default function Businesses() {
           <table className="w-full">
             <thead className="bg-secondary/50">
               <tr>
-                <Th>Business</Th><Th>Owner</Th><Th>Plan</Th><Th>Usage</Th><Th>KB</Th><Th>Chats</Th><Th>Status</Th><Th>Created</Th><Th></Th>
+                <Th>Business</Th><Th>Owner</Th><Th>Plan</Th><Th>Usage</Th><Th>KB</Th><Th>Chats</Th><Th>Health</Th><Th>Status</Th><Th>Created</Th><Th></Th>
               </tr>
             </thead>
             <tbody>
@@ -77,6 +90,7 @@ export default function Businesses() {
                   <Td>{b.monthly_used}/{b.monthly_limit}</Td>
                   <Td>{b.kb_chunks}</Td>
                   <Td>{b.conversations}</Td>
+                  <Td><Pill tone={healthTone(b.health)}>{b.health}</Pill></Td>
                   <Td>{b.status === "suspended" ? <Pill tone="danger">suspended</Pill> : <Pill tone="ok">active</Pill>}</Td>
                   <Td className="text-xs text-muted-foreground">{fmtDate(b.created_at)}</Td>
                   <Td className="text-right whitespace-nowrap">
@@ -84,7 +98,7 @@ export default function Businesses() {
                   </Td>
                 </Row>
               ))}
-              {!items.length && <tr><Td className="text-center text-muted-foreground py-8" colSpan={9}>No businesses</Td></tr>}
+              {!items.length && <tr><Td className="text-center text-muted-foreground py-8" colSpan={10}>No businesses</Td></tr>}
             </tbody>
           </table>
         </div>
@@ -124,7 +138,7 @@ export default function Businesses() {
               <select onChange={(e) => e.target.value && doAction(detail.business.business_id, "set_plan", { plan: e.target.value })} defaultValue=""
                 className="text-xs px-2 py-1.5 rounded-md border border-border bg-card">
                 <option value="" disabled>Set plan…</option>
-                <option value="free">Free</option><option value="starter">Starter</option><option value="pro">Pro</option>
+                <option value="free">Free</option><option value="starter">Starter</option><option value="growth">Growth</option><option value="scale">Scale</option>
               </select>
               <Btn variant="ghost" onClick={() => doAction(detail.business.business_id, "extend", { extra_days: 30 })}>+30 days</Btn>
               <Btn variant="accent" onClick={() => impersonate(detail.business.business_id, detail.business.name)}>Login as owner</Btn>

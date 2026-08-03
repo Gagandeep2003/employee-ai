@@ -32,6 +32,9 @@ from routers import billing as billing_router
 from routers import referrals as ref_router
 from routers import owner_chat as oc_router
 from routers import admin as admin_router
+from routers import api_keys as api_keys_router
+from routers import public_api as public_api_router
+from routers import legal as legal_router
 from storage import init_storage
 from auth import seed_admin
 from scheduler import start_scheduler, stop_scheduler
@@ -40,6 +43,7 @@ for r in [
     auth_router.router, biz_router.router, kb_router.router, chat_router.router,
     conv_router.router, ana_router.router, billing_router.router,
     ref_router.router, oc_router.router, admin_router.router,
+    api_keys_router.router, public_api_router.router, legal_router.router,
 ]:
     api.include_router(r)
 
@@ -108,14 +112,30 @@ async def startup():
     await db.businesses.create_index("owner_user_id")
     await db.knowledge_chunks.create_index([("business_id", 1)])
     await db.conversations.create_index([("business_id", 1), ("created_at", -1)])
+    await db.conversations.create_index([("business_id", 1), ("archived", 1), ("last_message_at", -1)])
     await db.messages.create_index([("conversation_id", 1)])
+    await db.messages.create_index([("business_id", 1), ("text", 1)])
     await db.files.create_index("business_id")
     await db.notifications.create_index([("business_id", 1), ("created_at", -1)])
     await db.referrals.create_index("code", unique=True)
     await db.payment_orders.create_index("razorpay_order_id", unique=True)
     await db.invoices.create_index([("business_id", 1), ("created_at", -1)])
+    await db.invoices.create_index("invoice_number", unique=True)
+    await db.counters.create_index("id", unique=True)
     await db.appointments.create_index([("business_id", 1), ("start_time", 1)])
     await db.appointments.create_index("reference")
+    await db.sessions.create_index("id", unique=True)
+    await db.sessions.create_index("user_id")
+    await db.sessions.create_index("refresh_token_hash")
+    await db.sessions.create_index("prev_refresh_token_hash")
+    await db.login_events.create_index([("user_id", 1), ("created_at", -1)])
+    await db.api_keys.create_index("id", unique=True)
+    await db.api_keys.create_index("key_hash")
+    await db.api_keys.create_index([("business_id", 1), ("status", 1)])
+    await db.api_key_usage.create_index([("key_id", 1), ("created_at", -1)])
+    await db.legal_documents.create_index([("doc_type", 1), ("version", -1)])
+    await db.legal_documents.create_index([("doc_type", 1), ("is_published", 1)])
+    await db.enterprise_leads.create_index([("created_at", -1)])
     await seed_admin()
     start_scheduler()
     logger.info("Indexes ensured; admin seed checked")

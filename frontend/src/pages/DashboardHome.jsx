@@ -76,13 +76,14 @@ export default function DashboardHome() {
         <div className="flex items-center gap-2">
           <input
             data-testid="owner-chat-input"
+            aria-label="Ask your AI employee"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && ask()}
             placeholder={`e.g. "Summarize today's conversations"`}
             className="flex-1 px-3 py-3 rounded-md border border-border bg-background outline-none focus:ring-2 focus:ring-primary"
           />
-          <button onClick={() => ask()} disabled={busy} data-testid="owner-chat-send" className="px-4 py-3 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-60">
+          <button onClick={() => ask()} disabled={busy} aria-label="Send" data-testid="owner-chat-send" className="px-4 py-3 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-60">
             <PaperPlaneRight size={16} weight="fill" />
           </button>
         </div>

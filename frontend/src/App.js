@@ -19,6 +19,8 @@ import WidgetSettings from "./pages/WidgetSettings";
 import Billing from "./pages/Billing";
 import Referrals from "./pages/Referrals";
 import Settings from "./pages/Settings";
+import Security from "./pages/Security";
+import LegalDocPage from "./pages/LegalDocPage";
 import Admin from "./pages/Admin";
 import AdminShell from "./components/AdminShell";
 import AdminExecutive from "./pages/admin/Executive";
@@ -37,6 +39,7 @@ import AdminFlags from "./pages/admin/FeatureFlags";
 import AdminSystem from "./pages/admin/SystemMonitor";
 import AdminAudit from "./pages/admin/AuditLog";
 import AdminSettings from "./pages/admin/Settings";
+import AdminLegal from "./pages/admin/Legal";
 import WidgetPage from "./pages/WidgetPage";
 import TalkPage from "./pages/TalkPage";
 import AppShell from "./components/AppShell";
@@ -58,6 +61,7 @@ function AppRouter() {
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/widget/:businessId" element={<WidgetPage />} />
       <Route path="/talk/:businessId" element={<TalkPage />} />
+      <Route path="/legal/:docType" element={<LegalDocPage />} />
       <Route path="/onboarding" element={<Protected><Onboarding /></Protected>} />
       <Route element={<Protected><AppShell /></Protected>}>
         <Route path="/dashboard" element={<DashboardHome />} />
@@ -70,6 +74,7 @@ function AppRouter() {
         <Route path="/billing" element={<Billing />} />
         <Route path="/referrals" element={<Referrals />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/security" element={<Security />} />
       </Route>
       <Route element={<Protected><AdminShell /></Protected>}>
         <Route path="/admin" element={<AdminExecutive />} />
@@ -88,6 +93,7 @@ function AppRouter() {
         <Route path="/admin/system" element={<AdminSystem />} />
         <Route path="/admin/audit" element={<AdminAudit />} />
         <Route path="/admin/settings" element={<AdminSettings />} />
+        <Route path="/admin/legal" element={<AdminLegal />} />
       </Route>
     </Routes>
   );

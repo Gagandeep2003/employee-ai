@@ -126,6 +126,132 @@ defaulted to. Now injected into `rag_answer()`'s system prompt.
 endpoint existed from the previous pass but had no button anywhere in the
 UI. Added outcome-tagging controls to the Conversations page.
 
+## Fixed in the enterprise auth pass
+
+**Single 7-day token, no revocation.** The original session model was one JWT,
+valid for 7 days, with no way to end a specific session early short of
+waiting out the expiry or invalidating everyone's secret -- no visibility
+into which devices were signed in, no way to sign out a stolen device
+without also nuking every other session, and no refresh path to begin with.
+Replaced with a standard access+refresh model: a short-lived (30-minute)
+access token plus an opaque, server-tracked refresh token that rotates on
+every use. Sessions live in `db.sessions` with device/IP metadata, so an
+owner can see every signed-in device (Settings → Security) and revoke one or
+all of them independently. Rotation includes reuse detection -- replaying an
+already-rotated-away refresh token (a strong signal of token theft) revokes
+the session immediately instead of silently accepting it. See
+`backend/sessions.py` and `backend/routers/auth.py`.
+
+**No brute-force protection on login.** `authenticate()` accepted unlimited
+password guesses against a single account (the existing `/auth/login` rate
+limit was per-IP, not per-account -- a distributed attempt would sail
+through). Added an admin-tunable lockout: after `max_failed_login_attempts`
+(default 5) consecutive failures, the account locks for `lockout_minutes`
+(default 15), independent of IP. Successful login clears the counter.
+
+**No visibility into sign-ins.** Added login history (`/auth/login-history`)
+recording every attempt -- success, wrong password, lockout, MFA required/
+failed -- with device and IP, plus a new-device email alert the first time a
+login is seen from a device never used on that account before. This is
+device-based, not geo/IP-based -- see "Still worth doing" below.
+
+**MFA was admin-only.** Two-factor was wired up for admin accounts in the
+previous pass but had no equivalent for business owners, even though an
+owner's account holds customer data, billing, and the live widget on their
+site. Setup/enable/disable logic is now shared (`auth.py`'s
+`mfa_setup_for`/`mfa_enable_for`/`mfa_disable_for`) between `/admin/mfa/*`
+(unchanged, backward compatible) and the new `/auth/mfa/*`, open to every
+account.
+
+**No way for a business's own systems to call the API.** Everything required
+a logged-in browser session. Added Business API Keys (`backend/api_keys.py`,
+`routers/api_keys.py`) scoped to a fixed permission vocabulary
+(`business:read`, `appointments:read/write`, `conversations:read`,
+`analytics:read`), shown once at creation/rotation and stored only as a
+SHA-256 hash afterward, with a per-key configurable rate limit and usage
+logging. Backed by a small external surface (`routers/public_api.py`,
+`/api/v1/...`) that reuses `booking.py` and `analytics.py` rather than
+re-implementing them -- an API key gets no special trust the browser-session
+booking flow doesn't already enforce. A key can only ever act on the one
+business it was created for (`test_api_key_cannot_be_created_for_someone_elses_business`).
+
+**Password reset didn't end other sessions.** Resetting a password left every
+existing session valid -- exactly the scenario where you'd want the
+opposite, whether the reset happened because the account was compromised or
+because the owner is deliberately locking out a stolen session.
+`reset-password` now revokes every other session.
+
+**Caught in testing, not shipped: revoking a session didn't actually revoke
+it.** An early version of this pass only checked session validity when the
+refresh token was used, so a "sign out this device" click had no visible
+effect until that device's access token happened to expire naturally (up to
+30 minutes later). `get_current_user` now checks server-side revocation on
+every request for tokens carrying a session id.
+
+**Also caught in testing: the scheduler crashed on a second app lifespan in
+the same process.** `start_scheduler()`/`stop_scheduler()` weren't
+idempotent -- a second startup (two `TestClient`s against the same app in one
+test, or certain ASGI reload scenarios) silently replaced the module-global
+scheduler without stopping the first, and a later shutdown on the
+by-then-already-stopped scheduler raised `SchedulerNotRunningError` instead
+of no-op'ing. Fixed to check `.running` before acting either way.
+
+**Also caught in testing: knowledge chunking silently dropped short
+entries.** Any manually-typed knowledge entry, or short crawled/uploaded
+document, whose *entire* text was 40 characters or fewer produced zero
+chunks with no error -- the 40-char floor was meant to trim a tiny leftover
+tail fragment from splitting a long document, not reject short inputs
+outright. An owner typing a short quick fact ("We're open Sundays too.") got
+silent data loss with a 200 OK response. Fixed to only trim a tail fragment
+when there's more than one chunk.
+
+**Also caught in testing: rate-limiter state leaked across test runs.**
+Unrelated to production behavior, but worth noting: the backend test suite
+was flaky -- `slowapi`'s in-memory limiter is a module-level singleton not
+reset between tests, so per-IP counters (e.g. `10/hour` on signup)
+accumulated across the whole suite and started failing unrelated later tests
+once enough requests had been made in aggregate. Fixed by resetting it (and
+the API-key rate limiter) in the test fixture alongside the fake DB.
+
+## Fixed in the GST billing, appointments, and reporting pass
+
+**A dangerous duplicate refund endpoint.** `/admin/invoices/{id}/refund` only flipped a
+database status flag to "refunded" -- it never called Razorpay. An admin using it would
+have believed a customer was refunded while their money never moved. Found while wiring up
+the reporting pass, not while touching billing directly. Now delegates to the real refund
+flow (`routers/billing.py`), which actually calls Razorpay's refund API and handles
+GST-aware partial refunds, instead of a second, incorrect implementation of the same thing.
+
+**Referral rewards re-fired on every purchase, not just the first.** The reward filter
+didn't exclude already-rewarded referrals, so a referrer would be "rewarded" (and, once the
+email was wired up, re-emailed) on every subsequent purchase by the same referred business
+-- an upgrade, a renewal, anything -- not just the intended first conversion. Fixed the
+filter to be idempotent.
+
+**The test double didn't support MongoDB's dot-notation for nested updates.** `{"$set":
+{"legal_acceptances.privacy_policy": 1}}` is standard, idiomatic Mongo for a nested field
+update; the fake DB was treating the dotted string as a literal flat key instead of nested
+path notation. The application code was correct against real MongoDB the whole time -- this
+was a gap in the test double's fidelity, caught because the acceptance-tracking feature's
+own tests failed against it. Fixed to interpret dot-notation like real MongoDB does.
+
+**Booking times were always interpreted as UTC, regardless of the business's actual
+timezone.** `Business.timezone` existed as a field (settable at signup) but was never once
+read by the booking logic -- a business in India with 9am-5pm hours was actually bookable
+9am-5pm *UTC* (2:30pm-10:30pm IST), silently wrong for every non-UTC business on the
+platform. Rewrote `booking.py` to interpret working hours in the business's own timezone
+(stdlib `zoneinfo`, no new dependency) and convert to UTC only for storage/comparison.
+
+**A proration bug that would have overcharged every upgrade.** The first version of the
+mid-cycle upgrade formula charged the full new-plan price *plus* the prorated top-up,
+nearly double-charging. Caught by a test asserting the charged amount stayed under the full
+price, not just "some proration was applied" -- see `test_upgrade_mid_cycle_is_prorated`.
+
+**A GST-compliance bug in the invoice PDF.** The generated invoice labeled both the CGST and
+SGST columns at the *full* combined rate (e.g. "18%" on each) instead of half each -- caught
+by actually rendering a test invoice and reading the text back out, not by trusting the
+code. `cgst_paise + sgst_paise` was always correct; only the on-page label was wrong.
+
 ## Hardened
 
 - **Tenant isolation**: every owner-facing query filters by `owner_user_id`;
@@ -173,3 +299,16 @@ UI. Added outcome-tagging controls to the Conversations page.
   one (`pytest`, runs offline against a fake DB); the React side doesn't yet.
 - Calendar sync (Google Calendar etc.) for appointments -- see README's
   "intentionally out of scope" section for why this wasn't built here.
+- Real geo/IP-based anomaly detection ("this login is from a new country").
+  What's implemented is device-based ("this login is from a device we've
+  never seen"), which is the useful 80% without adding a GeoIP dataset or
+  third-party lookup dependency -- worth revisiting if that's a priority.
+- The Business API Keys' external surface (`routers/public_api.py`) is
+  deliberately small -- business profile, appointments, conversations, and
+  an analytics summary. Extend `AVAILABLE_SCOPES` and the router together if
+  a specific integration needs more.
+- A dedicated `sid`-carrying migration path for tokens issued before this
+  pass isn't needed -- old 7-day tokens simply keep working under the old
+  rules (no revocation check, since they carry no session id) until they
+  naturally expire within a week, after which every login goes through the
+  new flow. No data migration required.

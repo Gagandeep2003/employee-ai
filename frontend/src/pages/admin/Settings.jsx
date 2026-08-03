@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import { useAuth } from "../../lib/auth";
+import { useMfa } from "../../lib/useMfa";
 import { toast } from "sonner";
 import { H1, Card, Btn } from "./_ui";
 
@@ -15,45 +15,30 @@ const LABELS = {
   crawl_max_pages: { l: "Crawler max pages", n: true },
   watermark_required_on_free: { l: "Force 'Powered by' on free plan", b: true },
   maintenance_mode: { l: "Maintenance mode (blocks widget chat)", b: true },
+  max_failed_login_attempts: { l: "Failed logins before lockout", n: true },
+  lockout_minutes: { l: "Account lockout duration (minutes)", n: true },
+  refresh_token_ttl_days: { l: "'Stay signed in' duration (days)", n: true },
+  api_key_default_rate_limit_per_min: { l: "Default API key rate limit (req/min)", n: true },
+  gst_enabled: { l: "GST enabled", b: true },
+  gst_rate: { l: "GST rate (%)", n: true, step: 0.5 },
+  hsn_sac_code: { l: "HSN/SAC code", t: true, placeholder: "998314" },
+  seller_legal_name: { l: "Seller legal name (for invoices)", t: true },
+  seller_gstin: { l: "Seller GSTIN", t: true, placeholder: "27AAAAA0000A1Z5" },
+  seller_state_code: { l: "Seller GST state code", t: true, placeholder: "27 = Maharashtra" },
+  seller_address: { l: "Seller address (for invoices)", t: true },
+  grace_period_days: { l: "Grace period after non-renewal (days)", n: true },
+  renewal_reminder_days_before: { l: "Renewal reminder (days before)", n: true },
+  overage_billing_enabled: { l: "Overage billing enabled", b: true },
+  overage_rate_per_chat_paise: { l: "Overage rate (paise / extra chat)", n: true },
+  support_email: { l: "Support email (shown to customers)", t: true },
+  company_legal_name: { l: "Company legal name", t: true },
+  company_address: { l: "Company address", t: true },
 };
 
 function MfaCard() {
-  const { user, refresh } = useAuth();
-  const [setup, setSetup] = useState(null); // { secret, provisioning_uri }
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const startSetup = async () => {
-    setBusy(true);
-    try {
-      const { data } = await api.post("/admin/mfa/setup");
-      setSetup(data);
-    } catch { toast.error("Couldn't start MFA setup"); }
-    setBusy(false);
-  };
-
-  const confirmSetup = async () => {
-    setBusy(true);
-    try {
-      await api.post("/admin/mfa/enable", { code });
-      toast.success("Two-factor authentication enabled");
-      setSetup(null); setCode("");
-      await refresh();
-    } catch (e) { toast.error(e.response?.data?.detail || "Incorrect code"); }
-    setBusy(false);
-  };
-
-  const disable = async () => {
-    setBusy(true);
-    try {
-      await api.post("/admin/mfa/disable", { password });
-      toast.success("Two-factor authentication disabled");
-      setPassword("");
-      await refresh();
-    } catch (e) { toast.error(e.response?.data?.detail || "Incorrect password"); }
-    setBusy(false);
-  };
+  const { user, setup, busy, startSetup, confirmSetup, disable, cancelSetup } = useMfa("/admin/mfa");
 
   return (
     <Card title="Two-factor authentication">
@@ -66,7 +51,7 @@ function MfaCard() {
             <span className="text-xs px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">Enabled</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Confirm password to disable"
               data-testid="mfa-disable-password" className="text-sm px-3 py-1.5 rounded-md border border-border bg-background" />
-            <Btn variant="danger" onClick={disable} disabled={busy || !password} testid="mfa-disable-btn">Disable</Btn>
+            <Btn variant="danger" onClick={async () => { if (await disable(password)) setPassword(""); }} disabled={busy || !password} testid="mfa-disable-btn">Disable</Btn>
           </div>
         ) : setup ? (
           <div className="space-y-3">
@@ -79,8 +64,8 @@ function MfaCard() {
                 placeholder="6-digit code" data-testid="mfa-confirm-code"
                 className="text-sm px-3 py-1.5 rounded-md border border-border bg-background w-32 text-center tracking-widest"
               />
-              <Btn onClick={confirmSetup} disabled={busy || code.length < 6} testid="mfa-confirm-btn">Confirm & enable</Btn>
-              <button onClick={() => { setSetup(null); setCode(""); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+              <Btn onClick={async () => { if (await confirmSetup(code)) setCode(""); }} disabled={busy || code.length < 6} testid="mfa-confirm-btn">Confirm & enable</Btn>
+              <button onClick={cancelSetup} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
             </div>
           </div>
         ) : (
@@ -118,6 +103,10 @@ export default function Settings() {
                   className={`relative w-12 h-6 rounded-full transition-colors ${s[k] ? "bg-accent" : "bg-secondary"}`}>
                   <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${s[k] ? "translate-x-6" : "translate-x-0.5"}`} />
                 </button>
+              ) : cfg.t ? (
+                <input type="text" value={s[k] || ""} onChange={(e) => setS({ ...s, [k]: e.target.value })}
+                  placeholder={cfg.placeholder || ""}
+                  className="w-64 px-3 py-2 rounded-md border border-border bg-background text-sm" />
               ) : (
                 <input type="number" step={cfg.step || 1} value={s[k]} onChange={(e) => setS({ ...s, [k]: cfg.step ? parseFloat(e.target.value) : parseInt(e.target.value) })}
                   className="w-32 px-3 py-2 rounded-md border border-border bg-background text-sm text-right font-mono" />
