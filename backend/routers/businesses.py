@@ -182,7 +182,7 @@ async def create_business(payload: BusinessCreate, bg: BackgroundTasks, user=Dep
         "widget": {
             "primary_color": "#1E3F33",
             "accent_color": "#C4A47C",
-            "welcome_message": f"Hi! I'm the AI Employee for {payload.name}. How can I help?",
+            "welcome_message": f"Hi! I'm Roviq Ai for {payload.name}. How can I help?",
             "position": "bottom-right",
             "logo_url": None,
             "show_branding": True,

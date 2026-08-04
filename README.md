@@ -1,4 +1,4 @@
-# AI Employee
+# Roviq Ai
 
 An AI front desk for small businesses. Connect a website (or add knowledge by
 hand), and it answers customer questions, books appointments, and hands off to

@@ -3,7 +3,7 @@ import axios from "axios";
 export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 export const ORIGIN = process.env.REACT_APP_BACKEND_URL;
 
-const TOKEN_KEY = "ai_employee_token";
+const TOKEN_KEY = "roviq_ai_token";
 
 // NOTE: normal login/signup relies entirely on the httpOnly session cookie the
 // backend sets -- it is NOT readable by JS, which is what makes it resistant to

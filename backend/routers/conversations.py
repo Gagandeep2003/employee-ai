@@ -11,7 +11,15 @@ VALID_OUTCOMES = {None, "lead", "booked", "resolved", "lost"}
 
 
 async def _verify(business_id: str, user: dict):
-    biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]}, {"_id": 0})
+    # Admins don't own any business, but the admin Conversation Explorer drills into
+    # conversation detail through this same owner-facing route -- without this bypass
+    # that lookup always 404s for them. This doesn't widen what an admin can reach:
+    # /admin/conversations already exposes every business's conversations, so this
+    # only unblocks the existing admin UI rather than granting a new capability.
+    if user.get("role") == "admin":
+        biz = await db.businesses.find_one({"business_id": business_id}, {"_id": 0})
+    else:
+        biz = await db.businesses.find_one({"business_id": business_id, "owner_user_id": user["user_id"]}, {"_id": 0})
     if not biz:
         raise HTTPException(404, "Not found")
     return biz

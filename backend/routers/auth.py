@@ -68,7 +68,7 @@ async def _send_verification_email(user: dict):
     token = create_verify_token(user["user_id"])
     link = _frontend_url(f"/verify-email?token={token}")
     await send_email(
-        user["email"], "Verify your email -- AI Employee",
+        user["email"], "Verify your email -- Roviq Ai",
         f"Hi {user.get('name') or ''},\n\nPlease confirm your email address:\n{link}\n\n"
         "If you didn't create this account, you can ignore this email.",
     )
@@ -359,7 +359,9 @@ async def google_callback(request: Request, code: str = None, state: str = None,
         resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
         return resp
 
-    resp = RedirectResponse(_frontend_url("/dashboard"))
+    # Admin accounts have no business of their own -- send them straight to the admin
+    # console instead of the owner dashboard (see the matching fix in Login.jsx).
+    resp = RedirectResponse(_frontend_url("/admin" if user.get("role") == "admin" else "/dashboard"))
     resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
     await _finish_login(resp, request, user, method="google")
     return resp
@@ -389,7 +391,7 @@ async def forgot_password(request: Request, payload: ForgotPasswordInput):
     if user:
         link = _frontend_url(f"/reset-password?token={create_reset_token(user['user_id'])}")
         await send_email(
-            user["email"], "Reset your password -- AI Employee",
+            user["email"], "Reset your password -- Roviq Ai",
             f"Hi {user.get('name') or ''},\n\nSomeone requested a password reset for this account. "
             f"If that was you, set a new password here (link expires in 30 minutes):\n{link}\n\n"
             "If you didn't request this, you can safely ignore this email.",

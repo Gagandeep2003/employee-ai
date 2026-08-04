@@ -1,8 +1,9 @@
 import React, { useEffect, useState, createContext, useContext } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, setAuthToken } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { toast } from "sonner";
+import ErrorBoundary from "./ErrorBoundary";
 import { Users, ChatCircleText, BookOpen, ChartLine, PaintBrush, CreditCard, Handshake, GearSix, ShieldCheck, SignOut, Buildings, House, CalendarCheck, EnvelopeSimple, X, Package, Lock } from "@phosphor-icons/react";
 
 export const BizCtx = createContext({ businesses: [], current: null, setCurrent: () => {} });
@@ -84,6 +85,7 @@ function LegalAcceptanceBanner() {
 export default function AppShell() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
   const [businesses, setBusinesses] = useState([]);
   const [current, setCurrent] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -95,7 +97,9 @@ export default function AppShell() {
       const c = data.find((b) => b.business_id === stored) || data[0] || null;
       setCurrent(c);
       setLoaded(true);
-      if (!data.length) nav("/onboarding", { replace: true });
+      // Admins legitimately have zero businesses of their own -- don't sweep them into
+      // onboarding; they use the "Admin console" link below instead.
+      if (!data.length && user?.role !== "admin") nav("/onboarding", { replace: true });
     }).catch(() => setLoaded(true));
   }, []);
 
@@ -125,7 +129,7 @@ export default function AppShell() {
       <div className="dark min-h-screen bg-background text-foreground flex" data-testid="app-shell">
         <aside className="w-64 border-r border-border bg-card flex flex-col">
           <div className="p-5 border-b border-border">
-            <div className="font-display text-xl tracking-tight">AI Employee</div>
+            <div className="font-display text-xl tracking-tight">Roviq Ai</div>
             <div className="text-[11px] text-muted-foreground uppercase tracking-[0.2em] mt-1">Business Console</div>
           </div>
           <div className="p-3 border-b border-border">
@@ -179,7 +183,9 @@ export default function AppShell() {
         <main className="flex-1 overflow-y-auto">
           <VerifyEmailBanner user={user} />
           <LegalAcceptanceBanner />
-          <Outlet />
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </BizCtx.Provider>

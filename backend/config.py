@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-logger = logging.getLogger("ai-employee.config")
+logger = logging.getLogger("roviq-ai.config")
 
 ENV = os.environ.get("ENV", "development").strip().lower()  # development | production
 IS_PRODUCTION = ENV == "production"
@@ -120,7 +120,7 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587") or 587)
 SMTP_USER = os.environ.get("SMTP_USER", "").strip() or None
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip() or None
 SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL", "").strip() or None
-SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "AI Employee").strip()
+SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "Roviq Ai").strip()
 SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").strip().lower() != "false"
 EMAIL_ENABLED = bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD and SMTP_FROM_EMAIL)
 if IS_PRODUCTION and not EMAIL_ENABLED:
@@ -146,7 +146,7 @@ ENABLE_SCHEDULER = os.environ.get("ENABLE_SCHEDULER", "true").strip().lower() !=
 # ---------------------------------------------------------------------------
 # Misc
 # ---------------------------------------------------------------------------
-APP_NAME = os.environ.get("APP_NAME", "ai-employee").strip()
+APP_NAME = os.environ.get("APP_NAME", "roviq-ai").strip()
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip() or None
 
 logger.info("Config loaded: ENV=%s GEMINI_MODEL=%s S3_STORAGE=%s RAZORPAY=%s REDIS=%s",

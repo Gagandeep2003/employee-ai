@@ -59,7 +59,10 @@ export default function Login() {
       if (typeof localStorage !== "undefined") localStorage.removeItem("pending_referral");
       await refresh();
       toast.success(mode === "signup" ? "Account created" : "Welcome back");
-      nav("/dashboard", { replace: true });
+      // Admin accounts have no business of their own -- send them straight to the
+      // admin console instead of the owner dashboard (which would otherwise bounce
+      // them into onboarding, since AppShell redirects any zero-business account there).
+      nav(data?.role === "admin" ? "/admin" : "/dashboard", { replace: true });
     } catch (err) {
       toast.error(formatErr(err.response?.data?.detail));
     }
@@ -71,10 +74,10 @@ export default function Login() {
     if (busy || mfaCode.length < 6) return;
     setBusy(true);
     try {
-      await api.post("/auth/mfa/verify", { mfa_token: mfaToken, code: mfaCode });
+      const { data } = await api.post("/auth/mfa/verify", { mfa_token: mfaToken, code: mfaCode });
       await refresh();
       toast.success("Welcome back");
-      nav("/dashboard", { replace: true });
+      nav(data?.role === "admin" ? "/admin" : "/dashboard", { replace: true });
     } catch (err) {
       toast.error(formatErr(err.response?.data?.detail) || "Incorrect code");
     }
@@ -91,9 +94,9 @@ export default function Login() {
           <div>
             <div className="text-[11px] uppercase tracking-[0.3em] text-accent mb-4">The intelligent front desk</div>
             <h1 className="font-display text-5xl leading-tight">Your business,<br/>always on.</h1>
-            <p className="mt-6 max-w-md opacity-80 leading-relaxed">One line of code. A knowledge base built from your website. An AI Employee that grows smarter every week.</p>
+            <p className="mt-6 max-w-md opacity-80 leading-relaxed">One line of code. A knowledge base built from your website. A Roviq Ai that grows smarter every week.</p>
           </div>
-          <div className="text-xs opacity-60">© {new Date().getFullYear()} AI Employee</div>
+          <div className="text-xs opacity-60">© {new Date().getFullYear()} Roviq Ai</div>
         </div>
       </div>
 
@@ -124,7 +127,7 @@ export default function Login() {
             <>
               <div className="font-display text-3xl tracking-tight">{mode === "signup" ? "Create your account" : "Welcome back"}</div>
               <p className="text-sm text-muted-foreground mt-2">
-                {mode === "signup" ? "Free forever plan. No card required." : "Sign in to your AI Employee dashboard."}
+                {mode === "signup" ? "Free forever plan. No card required." : "Sign in to your Roviq Ai dashboard."}
               </p>
 
               <a

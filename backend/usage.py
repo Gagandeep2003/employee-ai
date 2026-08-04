@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from db import db
 
-logger = logging.getLogger("ai-employee.usage")
+logger = logging.getLogger("roviq-ai.usage")
 
 
 def current_period() -> str:

@@ -15,7 +15,7 @@ from google.genai import types
 
 import config
 
-logger = logging.getLogger("ai-employee.embeddings")
+logger = logging.getLogger("roviq-ai.embeddings")
 
 _client: Optional[genai.Client] = None
 

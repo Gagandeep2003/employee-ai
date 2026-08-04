@@ -12,7 +12,7 @@ import pytest
 
 os.environ.setdefault("ENV", "development")
 os.environ.setdefault("MONGO_URL", "mongodb://fake")
-os.environ.setdefault("DB_NAME", "test_ai_employee")
+os.environ.setdefault("DB_NAME", "test_roviq_ai")
 os.environ.setdefault("JWT_SECRET", "test-secret-" + "x" * 40)
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000")
 

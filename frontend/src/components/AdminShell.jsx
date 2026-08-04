@@ -1,7 +1,9 @@
-import React, { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useAuth } from "../lib/auth";
 import { api, setAuthToken } from "../lib/api";
+import ErrorBoundary from "./ErrorBoundary";
 import {
   ChartLineUp, Buildings, UsersThree, Receipt, Robot, Chats, BookOpen, Globe, Handshake,
   Tag, Ticket, Broadcast, Flag, Pulse, ClipboardText, GearSix, SignOut, ArrowSquareOut, Scroll
@@ -30,13 +32,26 @@ const LINKS = [
 export default function AdminShell() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
   const logout = async () => { await api.post("/auth/logout"); setAuthToken(null); window.location.href = "/"; };
+  const isAdmin = user?.role === "admin";
+
+  // Protected (in App.js) only checks "is logged in" -- without this, any signed-in
+  // business owner who types /admin in the URL bar would see the full admin sidebar
+  // and every admin page attempting (and failing) to load platform-wide data. The
+  // backend independently rejects all of it via _ensure_admin either way, but this
+  // keeps a non-admin from ever seeing the console shell in the first place.
+  useEffect(() => {
+    if (!isAdmin) toast.error("That page is for admin accounts only.");
+  }, [isAdmin]);
+
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="dark min-h-screen bg-background text-foreground flex" data-testid="admin-shell">
       <aside className="w-60 border-r border-border bg-card flex flex-col">
         <div className="p-5 border-b border-border">
-          <div className="font-display text-xl tracking-tight">AI Employee</div>
+          <div className="font-display text-xl tracking-tight">Roviq Ai</div>
           <div className="text-[10px] uppercase tracking-[0.25em] text-accent mt-1">Admin Console</div>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
@@ -68,7 +83,11 @@ export default function AdminShell() {
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
-        <Outlet />
+        {/* Keyed by route so a crash on one admin page resets when you navigate to
+            another, instead of the whole console staying stuck on the fallback. */}
+        <ErrorBoundary key={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

@@ -16,7 +16,7 @@ from google.genai import errors as genai_errors
 
 import config
 
-logger = logging.getLogger("ai-employee.llm")
+logger = logging.getLogger("roviq-ai.llm")
 
 _client: Optional[genai.Client] = None
 
@@ -144,7 +144,7 @@ async def rag_answer(business_name: str, business_context: str, history: List[di
         if language else ""
     )
     system = (
-        f"You are the AI Employee for '{business_name}'. You represent this business as a knowledgeable, "
+        f"You are Roviq Ai, the AI receptionist for '{business_name}'. You represent this business as a knowledgeable, "
         "polite, warm, and slightly witty receptionist -- friendly and human, never robotic or stiff. "
         "Answer using the CONTEXT and LIVE INFO below. If neither contains the answer, politely say you "
         "don't know that specific detail and offer to connect them with a human. Never invent prices, "

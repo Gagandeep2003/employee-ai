@@ -51,12 +51,12 @@ export default function ChatWidget({ businessId, config }) {
   const primary = config?.widget?.primary_color || "#1E3F33";
   const accent = config?.widget?.accent_color || "#C4A47C";
   const welcome = config?.widget?.welcome_message || "Hi! How can I help?";
-  const businessName = config?.business_name || "AI Employee";
+  const businessName = config?.business_name || "Roviq Ai";
   const showBranding = config?.widget?.show_branding !== false;
   const teaserEnabled = config?.widget?.teaser_enabled !== false;
   const teaserDelayMs = Math.max(1, Number(config?.widget?.teaser_delay_seconds ?? 4)) * 1000;
   const pulseEnabled = config?.widget?.pulse_enabled !== false;
-  const teaserKey = useMemo(() => `ai_employee_teaser_${businessId}`, [businessId]);
+  const teaserKey = useMemo(() => `roviq_ai_teaser_${businessId}`, [businessId]);
 
   // Widget corner is driven entirely by config -- never hardcoded. Anything
   // other than an explicit "bottom-left" falls back to "bottom-right" so old
@@ -118,7 +118,7 @@ export default function ChatWidget({ businessId, config }) {
   // it to the iframe's CSS. No-op when not embedded (window.parent === window).
   const reportSize = (w, h) => {
     if (typeof window === "undefined" || window.parent === window) return;
-    window.parent.postMessage({ source: "ai-employee-widget", type: "size", width: w, height: h }, "*");
+    window.parent.postMessage({ source: "roviq-ai-widget", type: "size", width: w, height: h }, "*");
   };
 
   useEffect(() => {
@@ -132,7 +132,7 @@ export default function ChatWidget({ businessId, config }) {
   // can know on its own, so we hand it over the same way we hand over size.
   useEffect(() => {
     if (typeof window === "undefined" || window.parent === window) return;
-    window.parent.postMessage({ source: "ai-employee-widget", type: "position", position }, "*");
+    window.parent.postMessage({ source: "roviq-ai-widget", type: "position", position }, "*");
   }, [position]);
 
   const dismissTeaser = () => {
@@ -234,7 +234,7 @@ export default function ChatWidget({ businessId, config }) {
           >
             <div style={{ background: primary }} className="text-white px-4 py-3 flex items-center justify-between">
               <div>
-                <div className="text-xs uppercase tracking-[0.2em]" style={{ color: accent }}>AI Employee</div>
+                <div className="text-xs uppercase tracking-[0.2em]" style={{ color: accent }}>Roviq Ai</div>
                 <div className="font-display text-base">{businessName}</div>
               </div>
               <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors" aria-label="Close chat" data-testid="close-widget"><X size={20} /></button>
@@ -333,7 +333,7 @@ export default function ChatWidget({ businessId, config }) {
                 </button>
               )}
               {showBranding && (
-                <div className="text-[10px] text-gray-400 mt-2 text-center">Powered by AI Employee</div>
+                <div className="text-[10px] text-gray-400 mt-2 text-center">Powered by Roviq Ai</div>
               )}
             </div>
           </div>

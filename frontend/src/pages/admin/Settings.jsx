@@ -7,7 +7,9 @@ import { H1, Card, Btn } from "./_ui";
 const LABELS = {
   default_free_limit: { l: "Free plan chat limit", n: true },
   starter_limit: { l: "Starter plan limit", n: true },
-  pro_limit: { l: "Pro plan limit", n: true },
+  growth_limit: { l: "Growth plan limit", n: true },
+  scale_limit: { l: "Scale plan limit", n: true },
+  pro_limit: { l: "Pro plan limit (legacy, pre-Growth rename)", n: true },
   referral_discount_pct: { l: "Referral discount %", n: true },
   referral_months: { l: "Referral duration (months)", n: true },
   confidence_threshold: { l: "AI confidence threshold (0-1)", n: true, step: 0.05 },

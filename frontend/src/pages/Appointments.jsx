@@ -151,7 +151,7 @@ export default function Appointments() {
         <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Appointments</div>
         <h1 className="font-display text-4xl tracking-tight">Let the AI book your calendar.</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          Turn this on and your AI Employee can check availability and book appointments for customers directly in
+          Turn this on and your Roviq Ai can check availability and book appointments for customers directly in
           the chat -- no back-and-forth calls. Good fit for clinics, salons, consultants, and repair shops.
         </p>
       </div>

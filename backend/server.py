@@ -11,9 +11,9 @@ import config
 from db import client, db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s | %(message)s")
-logger = logging.getLogger("ai-employee")
+logger = logging.getLogger("roviq-ai")
 
-app = FastAPI(title="AI Employee", version="1.0.0")
+app = FastAPI(title="Roviq Ai", version="1.0.0")
 api = APIRouter(prefix="/api")
 
 # Rate limiting
@@ -50,7 +50,7 @@ for r in [
 
 @api.get("/")
 async def root():
-    return {"service": "AI Employee", "status": "ok"}
+    return {"service": "Roviq Ai", "status": "ok"}
 
 
 @api.get("/health")

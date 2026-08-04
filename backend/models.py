@@ -68,7 +68,7 @@ class Business(BaseModel):
     widget: Dict[str, Any] = Field(default_factory=lambda: {
         "primary_color": "#1E3F33",
         "accent_color": "#C4A47C",
-        "welcome_message": "Hi there! I'm your AI Employee. How can I help you today?",
+        "welcome_message": "Hi there! I'm Roviq Ai. How can I help you today?",
         "position": "bottom-right",
         "logo_url": None,
         "show_branding": True,

@@ -42,7 +42,7 @@ from email_sender import (
     send_referral_reward_email,
 )
 
-logger = logging.getLogger("ai-employee.billing")
+logger = logging.getLogger("roviq-ai.billing")
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 # Prices are GST-inclusive, in rupees, alongside paise for Razorpay. Margins at these price
@@ -50,7 +50,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 # per chat turn incl. RAG context) -- see DEPLOYMENT.md for the full cost breakdown.
 PLANS = {
     "free": {"name": "Free", "price_inr": 0, "limit": 100,
-             "features": ["100 chats / month", "AI Employee watermark", "1 business"]},
+             "features": ["100 chats / month", "Roviq Ai watermark", "1 business"]},
     "starter": {"name": "Starter", "price_inr": 999, "limit": 2000,
                 "features": ["2,000 chats / month", "No branding", "Widget customization", "Email support"]},
     "growth": {"name": "Growth", "price_inr": 2999, "limit": 10000,
@@ -73,7 +73,7 @@ def _razorpay_client():
         raise HTTPException(503, "Payments are not configured on this deployment yet. Please contact support.")
     import razorpay
     client = razorpay.Client(auth=(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET))
-    client.set_app_details({"title": "AI-Employee", "version": "1.0"})
+    client.set_app_details({"title": "Roviq-Ai", "version": "1.0"})
     return client
 
 

@@ -12,7 +12,7 @@ from typing import Tuple
 
 import config
 
-logger = logging.getLogger("ai-employee.storage")
+logger = logging.getLogger("roviq-ai.storage")
 
 _s3_client = None
 

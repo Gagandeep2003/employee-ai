@@ -18,13 +18,13 @@ const GUIDES = [
       "In Shopify admin: Online Store → Themes → click 'Actions' → 'Edit code'.",
       "Under 'Layout', open 'theme.liquid'.",
       "Scroll to the bottom and paste the snippet just before </body>.",
-      "Click 'Save'. Your storefront now shows the AI Employee bubble."
+      "Click 'Save'. Your storefront now shows the Roviq Ai bubble."
     ]},
   { id: "wix", name: "Wix",
     steps: [
       "Wix dashboard → Settings → Custom Code (under Advanced).",
       "Click '+ Add Custom Code'.",
-      "Paste the snippet in the code box, name it 'AI Employee', choose 'Body — end'.",
+      "Paste the snippet in the code box, name it 'Roviq Ai', choose 'Body — end'.",
       "Apply to 'All pages' and click 'Apply'."
     ]},
   { id: "squarespace", name: "Squarespace",
@@ -82,12 +82,12 @@ Please add this one line to our website — just before </body> on every page:
 
 ${snippet}
 
-It installs our new AI Employee (the chat bubble in the bottom-right corner that answers customer questions 24/7).
+It installs our new Roviq Ai (the chat bubble in the bottom-right corner that answers customer questions 24/7).
 
 If you use WordPress, Shopify, Wix, Squarespace, or a website builder — a plugin/settings option usually exists to paste this. Please let me know once it's live.
 
 Thanks!`);
-  const mailto = `mailto:?subject=${encodeURIComponent("Please install our AI Employee")}&body=${emailBody}`;
+  const mailto = `mailto:?subject=${encodeURIComponent("Please install our Roviq Ai")}&body=${emailBody}`;
 
   return (
     <div className="p-8 space-y-6">
@@ -226,7 +226,7 @@ Thanks!`);
                   onChange={(e) => setW({ ...w, show_branding: e.target.checked })}
                   data-testid="widget-branding"
                 />
-                Show "Powered by AI Employee" {current.plan === "free" ? "(required on Free plan -- upgrade to remove)" : ""}
+                Show "Powered by Roviq Ai" {current.plan === "free" ? "(required on Free plan -- upgrade to remove)" : ""}
               </label>
               <button onClick={save} data-testid="widget-save" className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors">Save changes</button>
             </div>

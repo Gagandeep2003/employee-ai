@@ -1,4 +1,4 @@
-"""Owner-side action registry — the AI Employee can perform these on behalf of the owner.
+"""Owner-side action registry — Roviq Ai can perform these on behalf of the owner.
 The LLM emits a JSON action block; this module validates and executes it against MongoDB.
 
 Design: the AI returns text like:

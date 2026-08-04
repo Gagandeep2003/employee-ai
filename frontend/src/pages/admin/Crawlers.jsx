@@ -8,7 +8,7 @@ export default function Crawlers() {
   const load = () => api.get("/admin/crawls").then(({ data }) => setItems(data));
   useEffect(() => { load(); const int = setInterval(load, 5000); return () => clearInterval(int); }, []);
   const recrawl = async (bid) => {
-    try { await api.post(`/businesses/${bid}/recrawl`); toast.success("Re-queued"); load(); }
+    try { await api.post(`/admin/businesses/${bid}/recrawl`); toast.success("Re-queued"); load(); }
     catch { toast.error("Failed"); }
   };
   return (

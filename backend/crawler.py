@@ -8,18 +8,51 @@ content instead of the same repeated menu and cookie notice.
 import asyncio
 import hashlib
 import heapq
+import ipaddress
 import re
+import socket
 from collections import Counter
 from itertools import count
 from urllib.parse import urljoin, urlparse, parse_qsl, urlencode
 from typing import List, Tuple
 import aiohttp
+from aiohttp.resolver import ThreadedResolver
 from bs4 import BeautifulSoup, Comment
 
 MAX_PAGES = 15
 CHUNK_SIZE = 700  # approx words
 CHUNK_OVERLAP = 80
 MIN_LINE_LEN = 15  # shorter lines are almost always nav labels/buttons, not content
+
+
+def _is_public_ip(ip_str: str) -> bool:
+    """True only for a routable public address -- rejects loopback (127.0.0.0/8, ::1),
+    RFC1918 private ranges, link-local (169.254.0.0/16, which is also where every major
+    cloud's instance-metadata endpoint lives), multicast, and other reserved ranges."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return not (
+        ip.is_private or ip.is_loopback or ip.is_link_local
+        or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+    )
+
+
+class _SSRFSafeResolver(ThreadedResolver):
+    """A business's "website" is a URL its owner types into a form, and the server
+    then fetches it -- classic SSRF setup. A crawl target could otherwise point at
+    localhost, an internal service, or a cloud metadata endpoint and the server would
+    dutifully fetch it. This filters every DNS answer down to public addresses only,
+    and does it at the connector level (not just a pre-request check) so it also
+    covers every redirect hop the crawler follows, not just the URL it started from.
+    """
+    async def resolve(self, host, port=0, family=socket.AF_INET):
+        results = await super().resolve(host, port, family=family)
+        safe = [r for r in results if _is_public_ip(r["host"])]
+        if not safe:
+            raise OSError(f"Refusing to crawl {host}: no public IP address")
+        return safe
 
 # Priority buckets for the crawl queue -- lower number = crawled sooner. An AI
 # receptionist needs "what do you offer / how much / how do I book" far more
@@ -169,7 +202,7 @@ def _chunk(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> L
 async def _fetch(session: aiohttp.ClientSession, url: str) -> str:
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=15),
-                               headers={"User-Agent": "AIEmployeeBot/1.0"}) as r:
+                               headers={"User-Agent": "RoviqAiBot/1.0"}) as r:
             if r.status != 200 or "text/html" not in r.headers.get("Content-Type", ""):
                 return ""
             return await r.text()
@@ -188,7 +221,7 @@ async def crawl_site(start_url: str, max_pages: int = MAX_PAGES) -> List[Tuple[s
     heap: list = [(0, next(counter), start_url)]
     pages: List[Tuple[str, str, List[str]]] = []  # (url, title, lines) before boilerplate pass 2 + chunking
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(resolver=_SSRFSafeResolver())) as session:
         while heap and len(seen_canonical) < max_pages:
             _, _, url = heapq.heappop(heap)
             canon = _canonicalize(url)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
@@ -8,6 +8,7 @@ from auth import get_current_user, create_token
 from db import db
 from audit import log as audit_log
 from routers.billing import PLANS
+from retrieval import invalidate
 import config
 from platform_settings import get_plan_limit
 
@@ -527,6 +528,27 @@ async def all_crawls(user=Depends(get_current_user)):
     return items
 
 
+@router.post("/businesses/{bid}/recrawl")
+async def admin_recrawl(bid: str, bg: BackgroundTasks, request: Request, user=Depends(get_current_user)):
+    """Same action as the owner-facing POST /businesses/{id}/recrawl, but not scoped to
+    owner_user_id -- an admin re-triggering a crawl from the Crawlers page is never the
+    business's owner, so that endpoint always 404s for admins. Kept separate rather than
+    loosening the owner route's ownership check."""
+    await _ensure_admin(user)
+    from routers.businesses import _run_crawl
+    biz = await db.businesses.find_one({"business_id": bid}, {"_id": 0})
+    if not biz:
+        raise HTTPException(404, "Not found")
+    if not biz.get("website"):
+        raise HTTPException(400, "No website set")
+    await db.knowledge_chunks.delete_many({"business_id": bid, "source": {"$regex": "^http"}})
+    invalidate(bid)
+    bg.add_task(_run_crawl, bid, biz["website"])
+    await db.businesses.update_one({"business_id": bid}, {"$set": {"crawl_status": "crawling", "crawl_progress": 5}})
+    await audit_log(request, user["user_id"], "admin.business.recrawl", "business", bid, {})
+    return {"ok": True}
+
+
 # =====================================================================
 # REFERRALS
 # =====================================================================
@@ -722,8 +744,8 @@ async def set_flag(payload: FlagUpdate, request: Request, user=Depends(get_curre
 @router.get("/system")
 async def system(user=Depends(get_current_user)):
     await _ensure_admin(user)
-    import psutil, platform, os as _os
     try:
+        import psutil, platform, os as _os
         cpu = psutil.cpu_percent(interval=0.2)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("/")

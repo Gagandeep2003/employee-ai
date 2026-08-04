@@ -49,7 +49,7 @@ async def ask(request: Request, payload: Ask, user=Depends(get_current_user)):
     recent_q = "\n".join(f"- {m['text']}" for m in recent) if recent else "(none)"
 
     system = (
-        f"You are the AI Employee for the OWNER of '{biz['name']}'. You are the owner's private ops assistant. "
+        f"You are Roviq Ai, the owner's private ops assistant for '{biz['name']}'. "
         "You have TWO capabilities:\n"
         "(a) READ - analyze data, summarize conversations, spot trends, suggest improvements.\n"
         "(b) WRITE - perform actions on the business (see action schema below) when the owner asks.\n"

@@ -1,5 +1,5 @@
 /**
- * AI Employee embed loader.
+ * Roviq Ai embed loader.
  *
  * Usage on a customer's website (that's the whole install -- one line, no build
  * step, works on any site regardless of what it's built with):
@@ -20,7 +20,7 @@
   })();
   var businessId = scriptEl.getAttribute("data-business");
   if (!businessId) {
-    console.error("[AI Employee] Missing data-business attribute on the embed <script> tag.");
+    console.error("[Roviq Ai] Missing data-business attribute on the embed <script> tag.");
     return;
   }
   // Defaults to the origin this script was loaded from, so a single build works
@@ -76,7 +76,7 @@
 
   window.addEventListener("message", function (event) {
     if (event.origin !== origin) return;
-    if (!event.data || event.data.source !== "ai-employee-widget") return;
+    if (!event.data || event.data.source !== "roviq-ai-widget") return;
     if (event.data.type === "size") {
       var w = Math.max(1, Math.min(600, event.data.width | 0));
       var h = Math.max(1, Math.min(800, event.data.height | 0));

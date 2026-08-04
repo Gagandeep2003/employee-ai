@@ -25,7 +25,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-baseline gap-3">
-            <span className="font-display text-2xl tracking-tight">AI Employee</span>
+            <span className="font-display text-2xl tracking-tight">Roviq Ai</span>
             <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">The intelligent front desk</span>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm">
@@ -43,14 +43,14 @@ export default function Landing() {
           <div className="md:col-span-7">
             <div className="text-xs uppercase tracking-[0.3em] text-accent mb-6">Not another chatbot.</div>
             <h1 className="font-display text-5xl md:text-6xl font-black leading-[0.95] tracking-tight">
-              Hire an <span className="italic font-light">AI Employee</span><br/>for your business.
+              Hire <span className="italic font-light">Roviq Ai</span><br/>for your business.
             </h1>
             <p className="mt-6 text-lg text-muted-foreground max-w-xl leading-relaxed">
               A real front-desk assistant that answers your customers <span className="text-foreground font-medium">and</span> takes commands from you. Update hours, pricing, or widget colors — in plain English. Doctors. Restaurants. Salons. Shops. All welcome.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/login" data-testid="hero-cta" className="group inline-flex items-center gap-2 px-6 py-3 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
-                Hire your AI Employee <ArrowUpRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
+                Hire Roviq Ai <ArrowUpRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <a href="#pricing" className="px-6 py-3 rounded-md border border-border hover:bg-secondary transition-colors">See pricing</a>
             </div>
@@ -138,7 +138,7 @@ export default function Landing() {
             {[
               { n: "01", t: "Sign up with Google", d: "Create your first business. Enter only what matters." },
               { n: "02", t: "Paste your URL", d: "We crawl and build your knowledge base. Upload PDFs to top it up." },
-              { n: "03", t: "Copy the snippet", d: "Paste one line on your site. Your AI Employee starts working." },
+              { n: "03", t: "Copy the snippet", d: "Paste one line on your site. Your Roviq Ai starts working." },
             ].map((s, i) => (
               <div key={i} className="bg-card border border-border rounded-lg p-8">
                 <div className="text-xs tracking-[0.3em] text-accent">{s.n}</div>
@@ -170,7 +170,7 @@ export default function Landing() {
           <h2 className="font-display text-4xl md:text-5xl">Start free. Upgrade when it earns its keep.</h2>
           <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { k: "free", n: "Free", p: 0, feat: ["100 chats / month", "AI Employee branding", "1 business"] },
+              { k: "free", n: "Free", p: 0, feat: ["100 chats / month", "Roviq Ai branding", "1 business"] },
               { k: "starter", n: "Starter", p: 999, feat: ["2,000 chats / month", "No branding", "Widget customization", "Email support"] },
               { k: "growth", n: "Growth", p: 2999, feat: ["10,000 chats / month", "Advanced analytics", "Priority support", "Unlimited uploads"], hi: true },
               { k: "scale", n: "Scale", p: 4999, feat: ["25,000 chats / month", "Everything in Growth", "Higher-volume priority support"] },
@@ -206,12 +206,12 @@ export default function Landing() {
       <section className="max-w-7xl mx-auto px-6 py-24 text-center">
         <h2 className="font-display text-5xl md:text-6xl tracking-tight max-w-3xl mx-auto">Give your business a second brain.</h2>
         <Link to="/login" data-testid="footer-cta" className="mt-8 inline-flex items-center gap-2 px-8 py-4 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
-          Hire your AI Employee <ArrowUpRight size={18} />
+          Hire Roviq Ai <ArrowUpRight size={18} />
         </Link>
       </section>
 
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} AI Employee. Not a chatbot.
+        © {new Date().getFullYear()} Roviq Ai. Not a chatbot.
       </footer>
     </div>
   );

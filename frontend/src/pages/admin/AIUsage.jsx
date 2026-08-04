@@ -30,7 +30,7 @@ export default function AIUsage() {
                   <Td>{b.name} <span className="text-[11px] text-muted-foreground">· {b.business_id}</span></Td>
                   <Td><Pill tone="accent">{b.plan}</Pill></Td>
                   <Td>{b.messages}</Td>
-                  <Td className="text-xs">{b.est_tokens.toLocaleString()}</Td>
+                  <Td className="text-xs">{((b.messages || 0) * 500).toLocaleString()}</Td>
                   <Td className={b.est_cost_usd > 1 ? "text-orange-300" : ""}>${b.est_cost_usd}</Td>
                   <Td>{b.monthly_used}/{b.monthly_limit}</Td>
                   <Td>{(b.avg_confidence * 100).toFixed(0)}%</Td>

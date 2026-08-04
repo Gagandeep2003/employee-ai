@@ -18,7 +18,7 @@ from platform_settings import get_settings
 from invoice_pdf import render_invoice_pdf
 from storage import put_object
 
-logger = logging.getLogger("ai-employee.invoicing")
+logger = logging.getLogger("roviq-ai.invoicing")
 
 
 def _financial_year(dt: datetime) -> str:

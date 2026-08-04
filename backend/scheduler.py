@@ -19,7 +19,7 @@ from freshness import businesses_needing_nudge, NUDGE_AFTER_DAYS
 from email_sender import send_email
 import config
 
-logger = logging.getLogger("ai-employee.scheduler")
+logger = logging.getLogger("roviq-ai.scheduler")
 
 _scheduler = None
 
@@ -54,9 +54,9 @@ async def staleness_nudge_job():
         try:
             await send_email(
                 biz["email"],
-                f"Anything changed at {biz['name']}? Your AI Employee hasn't heard.",
+                f"Anything changed at {biz['name']}? Your Roviq Ai hasn't heard.",
                 f"Hi,\n\nIt's been over {NUDGE_AFTER_DAYS} days since anything was updated in {biz['name']}'s "
-                "AI Employee knowledge base. If your hours, pricing, stock, or anything else has changed, "
+                "Roviq Ai knowledge base. If your hours, pricing, stock, or anything else has changed, "
                 "now's a good time to update it -- even a quick note in Quick Facts takes 10 seconds and "
                 "keeps your AI from giving customers outdated answers.\n\n"
                 "Log in to your dashboard to update it.",

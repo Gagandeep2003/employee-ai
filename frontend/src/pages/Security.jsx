@@ -325,7 +325,7 @@ function ApiKeysCard({ businessId }) {
   if (keys === null) return null;
 
   return (
-    <CardShell title="API keys" subtitle="Let your own systems call the AI Employee API on this business's behalf."
+    <CardShell title="API keys" subtitle="Let your own systems call the Roviq Ai API on this business's behalf."
       action={!creating && (
         <button onClick={() => setCreating(true)} data-testid="new-key-btn"
           className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors inline-flex items-center gap-1.5">

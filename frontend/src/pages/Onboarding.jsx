@@ -51,7 +51,7 @@ export default function Onboarding() {
 
             <div className="mt-10 flex gap-3">
               <button onClick={submit} disabled={busy} data-testid="ob-submit" className="px-6 py-3 rounded-md bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-60">
-                {busy ? "Creating…" : "Create AI Employee"}
+                {busy ? "Creating…" : "Create Roviq Ai"}
               </button>
             </div>
           </>
@@ -141,7 +141,7 @@ function ReviewStep({ biz, onDone }) {
 
       <div className="mt-6 bg-card border border-border rounded-lg p-5">
         <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
-          What your AI Employee knows {crawling && "(still loading…)"}
+          What your Roviq Ai knows {crawling && "(still loading…)"}
         </div>
         {chunks.length === 0 && !crawling && (
           <div className="text-sm text-muted-foreground">Nothing yet -- add something below, or your AI will politely say it doesn't know until you do.</div>

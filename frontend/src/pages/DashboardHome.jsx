@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useBiz } from "../components/AppShell";
+import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 import { PaperPlaneRight, Sparkle } from "@phosphor-icons/react";
 
 export default function DashboardHome() {
   const { current, refresh } = useBiz();
+  const { user } = useAuth();
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   const [answer, setAnswer] = useState("");
@@ -38,7 +40,30 @@ export default function DashboardHome() {
     setBusy(false);
   };
 
-  if (!current) return null;
+  if (!current) {
+    return (
+      <div className="p-8" data-testid="dashboard-home-empty">
+        <div className="max-w-md">
+          <h1 className="font-display text-3xl tracking-tight">No business yet</h1>
+          <p className="text-sm text-muted-foreground mt-2">
+            {user?.role === "admin"
+              ? "This admin account isn't attached to a business. Head back to the admin console, or add a business below if you want one for this account."
+              : "This account isn't attached to a business yet. Add one to get started."}
+          </p>
+          <div className="mt-6 flex items-center gap-3">
+            <Link to="/onboarding" data-testid="empty-add-business" className="px-4 py-2.5 rounded-md bg-primary text-primary-foreground text-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+              Add a business
+            </Link>
+            {user?.role === "admin" && (
+              <Link to="/admin" data-testid="empty-back-to-admin" className="px-4 py-2.5 rounded-md border border-border text-sm hover:bg-secondary transition-colors">
+                Back to admin console
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const suggestions = [
     "Summarize today's conversations",
@@ -76,7 +101,7 @@ export default function DashboardHome() {
         <div className="flex items-center gap-2">
           <input
             data-testid="owner-chat-input"
-            aria-label="Ask your AI employee"
+            aria-label="Ask your AI ops assistant"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && ask()}

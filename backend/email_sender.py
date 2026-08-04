@@ -9,7 +9,7 @@ from email.message import EmailMessage
 
 import config
 
-logger = logging.getLogger("ai-employee.email")
+logger = logging.getLogger("roviq-ai.email")
 
 
 def _send_sync(to_email: str, subject: str, body_text: str, reply_to: str = None) -> bool:
@@ -46,7 +46,7 @@ async def send_handoff_email(owner_email: str, business_name: str, visitor_name:
                              visitor_email: str, note: str, conversation_id: str) -> bool:
     subject = f"[{business_name}] A visitor wants to talk to a human"
     lines = [
-        f"Someone chatting with your AI Employee on {business_name} asked to speak with a person.",
+        f"Someone chatting with your Roviq Ai on {business_name} asked to speak with a person.",
         "",
         f"Name: {visitor_name or '(not given)'}",
         f"Email: {visitor_email or '(not given)'}",
@@ -103,11 +103,11 @@ async def send_api_key_created_email(to_email: str, name: str, key_name: str, bu
 
 
 async def send_welcome_email(to_email: str, name: str) -> bool:
-    subject = "Welcome to AI Employee"
+    subject = "Welcome to Roviq Ai"
     lines = [
         f"Hi {name or ''},",
         "",
-        "Welcome aboard! Your AI Employee account is ready. Next step: add a business and "
+        "Welcome aboard! Your Roviq Ai account is ready. Next step: add a business and "
         "either point it at your website or type in a few facts, and your AI receptionist "
         "will be answering customer questions within minutes.",
         "",
@@ -198,7 +198,7 @@ async def send_past_due_email(to_email: str, name: str, business_name: str, grac
         f"Hi {name or ''},",
         "",
         f"Your plan for {business_name} wasn't renewed in time. We're giving you a {grace_days}-day "
-        "grace period with no interruption to your AI Employee while you sort it out -- "
+        "grace period with no interruption to your Roviq Ai while you sort it out -- "
         "renew from Billing in your dashboard before the grace period ends to avoid being "
         "moved to the free plan.",
     ]
@@ -211,7 +211,7 @@ async def send_downgraded_email(to_email: str, name: str, business_name: str) ->
         f"Hi {name or ''},",
         "",
         f"{business_name} wasn't renewed within the grace period, so it's been moved to the "
-        "free plan. Your AI Employee is still running, just at the free plan's chat limit. "
+        "free plan. Your Roviq Ai is still running, just at the free plan's chat limit. "
         "Renew any time from Billing in your dashboard.",
     ]
     return await send_email(to_email, subject, "\n".join(lines))
@@ -234,7 +234,7 @@ async def send_booking_email(owner_email: str, business_name: str, service: str,
                              customer_email: str, reference: str) -> bool:
     subject = f"[{business_name}] New appointment booked: {service}"
     lines = [
-        f"Your AI Employee just booked an appointment on {business_name}.",
+        f"Your Roviq Ai just booked an appointment on {business_name}.",
         "",
         f"Service: {service}",
         f"When: {start_time}",

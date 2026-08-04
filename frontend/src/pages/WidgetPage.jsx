@@ -9,7 +9,7 @@ import ChatWidget from "../components/ChatWidget";
 // to load at all). No-op when this page isn't inside an iframe.
 function reportSize(w, h) {
   if (typeof window === "undefined" || window.parent === window) return;
-  window.parent.postMessage({ source: "ai-employee-widget", type: "size", width: w, height: h }, "*");
+  window.parent.postMessage({ source: "roviq-ai-widget", type: "size", width: w, height: h }, "*");
 }
 
 export default function WidgetPage() {

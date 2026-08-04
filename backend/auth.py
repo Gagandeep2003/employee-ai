@@ -400,7 +400,7 @@ async def seed_admin():
 
 def _warn_no_admin_seed():
     import logging
-    logging.getLogger("ai-employee.auth").warning(
+    logging.getLogger("roviq-ai.auth").warning(
         "ADMIN_EMAIL/ADMIN_PASSWORD not set -- no admin account will be seeded. "
         "Set both env vars and restart to create one; promote further admins from the admin panel."
     )

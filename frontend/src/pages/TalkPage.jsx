@@ -21,7 +21,7 @@ function todayKey(timezone) {
 // ---------------------------------------------------------------------------
 function InlineChat({ businessId, businessName, primary, accent, suggestions }) {
   const [messages, setMessages] = useState([
-    { role: "ai", text: `Hi! I'm ${businessName}'s AI Employee. Ask me anything -- hours, services, pricing, or booking an appointment.` },
+    { role: "ai", text: `Hi! I'm ${businessName}'s Roviq Ai. Ask me anything -- hours, services, pricing, or booking an appointment.` },
   ]);
   const [input, setInput] = useState("");
   const [convId, setConvId] = useState(null);
@@ -132,7 +132,7 @@ export default function TalkPage() {
     if (!config) return;
     const prevTitle = document.title;
     document.title = `Chat with ${config.business_name}${config.category ? ` — ${config.category}` : ""}`;
-    const desc = `Ask ${config.business_name} anything -- hours, services, pricing, or book an appointment, answered instantly by their AI Employee.`;
+    const desc = `Ask ${config.business_name} anything -- hours, services, pricing, or book an appointment, answered instantly by their Roviq Ai.`;
     let meta = document.querySelector('meta[name="description"]');
     const created = !meta;
     if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
@@ -178,7 +178,7 @@ export default function TalkPage() {
       {/* Hero */}
       <div className="relative max-w-2xl mx-auto px-6 pt-16 pb-10 text-white text-center">
         <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.3em] px-3 py-1 rounded-full border border-white/20" style={{ color: accent }}>
-          <Sparkle size={11} weight="fill" /> AI Employee
+          <Sparkle size={11} weight="fill" /> Roviq Ai
         </div>
         <h1 className="font-display text-4xl md:text-5xl tracking-tight mt-4">{config.business_name}</h1>
         {config.category && <p className="mt-2 text-sm text-white/60">{config.category}</p>}
