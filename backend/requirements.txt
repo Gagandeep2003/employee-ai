@@ -26,8 +26,8 @@ google-genai>=0.7,<1.0
 boto3>=1.35,<2.0
 
 # --- Payments ---
-razorpay>=1.4,<2.0
-setuptools>=70.0.0
+razorpay==1.4.2
+setuptools==80.9.0
 
 # --- Web crawling / knowledge ingestion ---
 aiohttp>=3.10,<4.0
