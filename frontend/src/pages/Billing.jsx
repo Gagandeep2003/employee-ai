@@ -125,7 +125,7 @@ export default function Billing() {
         key: data.key_id,
         amount: data.amount,
         currency: data.currency,
-        name: data.business_name || "Roviq Ai",
+        name: "Roviq Ai",
         description: data.proration_applied ? `${plans[plan]?.name || plan} plan (prorated upgrade)` : `${plans[plan]?.name || plan} plan`,
         order_id: data.order_id,
         theme: { color: "#1E3F33" },
