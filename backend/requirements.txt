@@ -1,56 +1,52 @@
-# Core
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-pydantic==2.10.4
-python-dotenv==1.0.1
+# --- Web framework ---
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.32,<1.0
+python-multipart>=0.0.12
+pydantic[email]>=2.9,<3.0
 
-# Database
-pymongo>=4.9,<4.10
-motor>=3.6.0
+# --- Database ---
+motor>=3.6,<4.0
+pymongo>=4.9,<5.0
 
-# Auth & Security
-PyJWT==2.10.1
-passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.3.0
+# --- Auth ---
+pyjwt>=2.9,<3.0
+bcrypt>=4.2,<5.0
+pyotp>=2.9,<3.0
 
-# HTTP Client
-httpx==0.28.1
+# --- Config ---
+python-dotenv>=1.0,<2.0
 
-# LLM
-google-genai==0.2.2
+# --- Rate limiting ---
+slowapi>=0.1.9,<0.2
 
-# Email
-resend==0.7.0
+# --- LLM (Gemini, direct) ---
+google-genai>=0.7,<1.0
 
-# Storage
-boto3==1.35.87
+# --- Object storage ---
+boto3>=1.35,<2.0
 
-# Payments
-razorpay==1.4.1
+# --- Payments ---
+razorpay==1.4.2
+setuptools==80.9.0
 
-# Rate Limiting
-slowapi==0.1.9
+# --- Web crawling / knowledge ingestion ---
+aiohttp>=3.10,<4.0
+beautifulsoup4>=4.12,<5.0
+rank-bm25>=0.2.2,<0.3
+pypdf>=5.0,<6.0
+reportlab>=4.0,<5.0
+openpyxl>=3.1,<4.0
+python-docx>=1.1,<2.0
 
-# Redis & Caching
-redis==5.2.1
+# --- Scheduled jobs ---
+apscheduler>=3.10,<4.0
 
-# Background Jobs
-rq==2.10.0
+# --- Admin system monitor ---
+psutil>=6.0,<7.0
 
-# SSE Streaming
-sse-starlette==2.4.1
+# --- NEW: Required for Email Service (Resend/Brevo) & HTTP Requests ---
+httpx>=0.28,<1.0
+resend>=0.7.0,<1.0
 
-# Utilities
-python-dateutil==2.9.0.post0
-aiofiles==24.1.0
-Pillow==11.0.0
-
-# Monitoring & Logging
-structlog==24.4.0
-
-# Development & Testing
-pytest==8.3.4
-pytest-asyncio==0.24.0
-black==24.10.0
-isort==5.13.2
-email-validator==2.2.0
+# --- NEW: Required for Redis Caching & Background Jobs ---
+redis>=5.2,<6.0
