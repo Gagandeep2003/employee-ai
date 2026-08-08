@@ -8,7 +8,7 @@ retrieval-grounded chat and JSON-action extraction. Override with
 GEMINI_MODEL if you need a stronger model for a specific business.
 """
 import logging
-from typing import List, Optional
+from typing import List, Optional, AsyncGenerator
 
 from google import genai
 from google.genai import types
@@ -183,6 +183,52 @@ async def owner_chat_reply(system: str, question: str) -> str:
     """Used by the owner-facing assistant (routers/owner_chat.py), which has a much
     larger system prompt (data snapshot + action schema) built by the caller."""
     return await _generate(system, question, temperature=0.3, max_output_tokens=800)
+
+
+async def stream_rag_answer(business_name: str, context: str, history: List[dict],
+                            question: str, current_date: str = "", booking_block: str = "",
+                            language: Optional[str] = None) -> AsyncGenerator[str, None]:
+    """Stream AI response token-by-token using Server-Sent Events"""
+    client = _get_client()
+    
+    # Build system prompt
+    system = (
+        f"You are a friendly, professional AI receptionist for '{business_name}'. "
+        "Answer questions accurately using ONLY the context provided below. If the answer isn't in the context, "
+        "say you don't have that information and offer to connect them with a human. "
+        "Be concise, warm, and helpful. Keep responses under 100 words unless detailed explanation is needed.\n\n"
+        f"{context}\n\n"
+        f"Today's date: {current_date}\n"
+        f"{booking_block}\n"
+        f"Respond in {language}." if language else ""
+    )
+    
+    # Build conversation history
+    history_text = "\n".join(f"{'Customer' if h['role'] == 'user' else 'AI'}: {h['text']}" for h in history[-6:])
+    
+    prompt = f"{history_text}\n\nCustomer: {question}\nAI:"
+    
+    try:
+        cfg = types.GenerateContentConfig(
+            system_instruction=system,
+            temperature=0.4,
+            max_output_tokens=512,
+        )
+        
+        # Use streaming API
+        response_stream = await client.aio.models.generate_content_stream(
+            model=config.GEMINI_MODEL,
+            contents=prompt,
+            config=cfg,
+        )
+        
+        async for chunk in response_stream:
+            if chunk.text:
+                yield chunk.text
+                
+    except Exception as e:
+        logger.error(f"Streaming LLM call failed: {e}")
+        yield "Sorry, I'm having trouble right now. Would you like to speak with a human?"
 
 
 async def generate_business_snapshot(business_name: str, category: str, combined_text: str) -> str:

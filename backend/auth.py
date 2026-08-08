@@ -388,6 +388,33 @@ async def seed_admin():
             "locked_until": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        
+        # Create initial sales team member if configured
+        sales_email = config.SALES_EMAIL
+        if sales_email:
+            temp_password = secrets.token_urlsafe(12)
+            await db.users.insert_one({
+                "user_id": f"user_{uuid.uuid4().hex[:12]}",
+                "email": sales_email,
+                "password_hash": hash_password(temp_password),
+                "name": "Sales Team",
+                "picture": None,
+                "role": "sales",
+                "disabled": False,
+                "email_verified": True,
+                "mfa_enabled": False,
+                "mfa_secret": None,
+                "referral_code": f"ref_{uuid.uuid4().hex[:8]}",
+                "referred_by_code": None,
+                "password_changed_at": datetime.now(timezone.utc).isoformat(),
+                "failed_login_count": 0,
+                "locked_until": None,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            # Send welcome email with temp password (will be sent async)
+            from email_service import send_sales_welcome_email
+            portal_url = config.FRONTEND_URL or "https://app.roviq.ai"
+            await send_sales_welcome_email(sales_email, "Sales Team", temp_password, portal_url)
     else:
         updates = {}
         if not verify_password(pw, existing.get("password_hash", "")):
