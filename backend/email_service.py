@@ -9,6 +9,7 @@ import logging
 import os
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
+from email.message import EmailMessage  # Moved to top level for type hints
 
 import config
 
@@ -166,7 +167,6 @@ class SMTPFallbackProvider(EmailProvider):
     async def send(self, to_email: str, subject: str, body_text: str,
                    body_html: Optional[str] = None, reply_to: Optional[str] = None,
                    cc: Optional[List[str]] = None, bcc: Optional[List[str]] = None) -> bool:
-        from email.message import EmailMessage
         import smtplib
         
         if not self.host:
@@ -208,6 +208,7 @@ class SMTPFallbackProvider(EmailProvider):
             return False
     
     def _send_sync(self, msg: EmailMessage, bcc: Optional[List[str]] = None):
+        import smtplib
         with smtplib.SMTP(self.host, self.port, timeout=10) as server:
             if self.use_tls:
                 server.starttls()
