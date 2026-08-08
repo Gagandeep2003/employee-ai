@@ -44,9 +44,11 @@ apscheduler>=3.10,<4.0
 # --- Admin system monitor ---
 psutil>=6.0,<7.0
 
-# --- NEW: Required for Email Service (Resend/Brevo) & HTTP Requests ---
+# --- Email Service (Resend/Brevo) & HTTP Requests ---
 httpx>=0.28,<1.0
 resend>=0.7.0,<1.0
 
-# --- NEW: Required for Redis Caching & Background Jobs ---
+# --- Redis Caching & Background Jobs (RQ) ---
 redis>=5.2,<6.0
+rq>=2.10,<3.0
+aiofiles>=24.1,<25.0
