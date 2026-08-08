@@ -5,13 +5,14 @@ pydantic==2.10.4
 python-dotenv==1.0.1
 
 # Database
-pymongo==4.10.1
+pymongo==4.9.2
 motor==3.6.1
 
 # Auth & Security
 PyJWT==2.10.1
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
+email-validator==2.2.0
 
 # HTTP Client
 httpx==0.28.1
@@ -21,7 +22,6 @@ google-genai==0.2.2
 
 # Email
 resend==0.7.0
-brevo-client==1.0.0
 
 # Storage
 boto3==1.35.87
@@ -37,13 +37,13 @@ redis==5.2.1
 
 # Background Jobs
 rq==2.10.0
+aiofiles==24.1.0
 
 # SSE Streaming
 sse-starlette==2.4.1
 
 # Utilities
 python-dateutil==2.9.0.post0
-aiofiles==24.1.0
 Pillow==11.0.0
 
 # Monitoring & Logging
