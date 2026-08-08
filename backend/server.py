@@ -35,6 +35,9 @@ from routers import admin as admin_router
 from routers import api_keys as api_keys_router
 from routers import public_api as public_api_router
 from routers import legal as legal_router
+from routers import tickets as tickets_router
+from routers import sales as sales_router
+from routers import notifications as notifications_router
 from storage import init_storage
 from auth import seed_admin
 from scheduler import start_scheduler, stop_scheduler
@@ -44,6 +47,7 @@ for r in [
     conv_router.router, ana_router.router, billing_router.router,
     ref_router.router, oc_router.router, admin_router.router,
     api_keys_router.router, public_api_router.router, legal_router.router,
+    tickets_router.router, sales_router.router, notifications_router.router,
 ]:
     api.include_router(r)
 
@@ -55,13 +59,22 @@ async def root():
 
 @api.get("/health")
 async def health():
-    """Unauthenticated liveness/readiness check for load balancers & uptime monitors."""
-    try:
-        await db.command("ping")
-        db_ok = True
-    except Exception:
-        db_ok = False
-    return {"status": "ok" if db_ok else "degraded", "database": "up" if db_ok else "down"}
+    """Enhanced health endpoint with full system status"""
+    from services.health_monitor import get_health_monitor
+    
+    monitor = get_health_monitor()
+    health_status = monitor.get_health_status()
+    
+    return health_status
+
+
+@api.get("/metrics")
+async def metrics():
+    """Performance metrics endpoint"""
+    from services.health_monitor import get_health_monitor
+    
+    monitor = get_health_monitor()
+    return monitor.get_performance_report()
 
 
 app.include_router(api)
@@ -94,6 +107,11 @@ async def security_headers(request: Request, call_next):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     """Avoid leaking stack traces / internals to clients in production."""
+    from services.health_monitor import get_health_monitor
+    
+    monitor = get_health_monitor()
+    monitor.record_error(type(exc).__name__, str(exc), {"path": request.url.path, "method": request.method})
+    
     logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc)
     if not config.IS_PRODUCTION:
         logger.error(traceback.format_exc())
@@ -136,6 +154,14 @@ async def startup():
     await db.legal_documents.create_index([("doc_type", 1), ("version", -1)])
     await db.legal_documents.create_index([("doc_type", 1), ("is_published", 1)])
     await db.enterprise_leads.create_index([("created_at", -1)])
+    await db.tickets.create_index([("business_id", 1), ("created_at", -1)])
+    await db.tickets.create_index([("status", 1), ("priority", -1)])
+    await db.notifications_system.create_index([("target_group", 1), ("created_at", -1)])
+    await db.notifications_system.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
+    await db.sales_referrals.create_index([("sales_user_id", 1), ("status", 1)])
+    await db.sales_referrals.create_index([("business_id", 1)], unique=True)
+    await db.password_reset_otps.create_index([("user_id", 1), ("used", 1), ("expires_at", -1)])
+    await db.password_reset_otps.create_index("email")
     await seed_admin()
     start_scheduler()
     logger.info("Indexes ensured; admin seed checked")

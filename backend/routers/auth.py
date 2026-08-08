@@ -18,6 +18,7 @@ import sessions as sessions_lib
 from db import db
 from ratelimit import limiter
 from email_sender import send_email, send_new_device_login_email, send_welcome_email
+import password_reset
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

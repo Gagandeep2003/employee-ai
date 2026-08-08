@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { PaperPlaneRight, X, ChatCircleDots, User, PaperPlaneTilt } from "@phosphor-icons/react";
+import { PaperPlaneRight, X, ChatCircleDots, User, PaperPlaneTilt, Robot, Sparkles } from "@phosphor-icons/react";
 import { api } from "../lib/api";
 
 // Respectful-but-playful nudges shown in a teaser bubble before the visitor has
@@ -43,6 +43,8 @@ export default function ChatWidget({ businessId, config }) {
   const [handoffForm, setHandoffForm] = useState(null); // null | { email: "", note: "" }
   const [teaser, setTeaser] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [showOrb, setShowOrb] = useState(true);
+  const [orbAnimation, setOrbAnimation] = useState('idle'); // idle, greeting, thinking
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const toggleRef = useRef(null);
@@ -74,6 +76,22 @@ export default function ChatWidget({ businessId, config }) {
   useEffect(() => {
     if (messages.length === 0) setMessages([{ role: "assistant", text: welcome }]);
   }, [welcome]);
+
+  // Orb animation states for premium feel
+  useEffect(() => {
+    if (!open) return;
+    // Show greeting animation when first opened
+    if (messages.length <= 1) {
+      setOrbAnimation('greeting');
+      const timer = setTimeout(() => setOrbAnimation('idle'), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [open, messages.length]);
+
+  useEffect(() => {
+    if (loading) setOrbAnimation('thinking');
+    else if (orbAnimation === 'thinking') setOrbAnimation('idle');
+  }, [loading]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
@@ -179,7 +197,10 @@ export default function ChatWidget({ businessId, config }) {
       });
       setHandoff(true);
       setHandoffForm(null);
-      setMessages((m) => [...m, { role: "assistant", text: "Thanks -- I've passed this along to the team. Someone will reach out shortly." }]);
+      // Show success message with animation
+      setMessages((m) => [...m, { role: "assistant", text: "✨ Thanks! I've passed this along to the team. Someone will reach out shortly." }]);
+      // Hide form after successful submission
+      setTimeout(() => setHandoff(false), 2000);
     } catch {
       setMessages((m) => [...m, { role: "assistant", text: "Hmm, couldn't reach the team just now -- please try again." }]);
     }
@@ -198,8 +219,14 @@ export default function ChatWidget({ businessId, config }) {
         <style>{`
           @keyframes ai-emp-pulse-ring { 0% { box-shadow: 0 0 0 0 ${primary}55; } 70% { box-shadow: 0 0 0 14px ${primary}00; } 100% { box-shadow: 0 0 0 0 ${primary}00; } }
           @keyframes ai-emp-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+          @keyframes ai-orb-glow { 0%, 100% { box-shadow: 0 0 20px ${accent}66, 0 0 40px ${accent}33; } 50% { box-shadow: 0 0 30px ${accent}99, 0 0 60px ${accent}66; } }
+          @keyframes ai-orb-wave { 0% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } 100% { transform: rotate(0deg); } }
+          @keyframes ai-orb-bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
           .ai-emp-pulse { animation: ai-emp-pulse-ring 2.6s cubic-bezier(0.4,0,0.6,1) infinite; }
           .ai-emp-float { animation: ai-emp-float 3.2s ease-in-out infinite; }
+          .ai-orb-glow { animation: ai-orb-glow 2s ease-in-out infinite; }
+          .ai-orb-wave { animation: ai-orb-wave 1s ease-in-out; }
+          .ai-orb-bounce { animation: ai-orb-bounce 0.3s ease-out; }
         `}</style>
       )}
       <div className={`absolute bottom-4 ${cornerClasses} pointer-events-auto flex flex-col gap-3`}>
@@ -233,9 +260,15 @@ export default function ChatWidget({ businessId, config }) {
             aria-label={`Chat with ${businessName}`}
           >
             <div style={{ background: primary }} className="text-white px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em]" style={{ color: accent }}>Roviq Ai</div>
-                <div className="font-display text-base">{businessName}</div>
+              <div className="flex items-center gap-3">
+                {/* Premium AI Avatar Orb */}
+                <div className={`w-10 h-10 rounded-full bg-white/20 flex items-center justify-center ${!reducedMotion && orbAnimation === 'greeting' ? 'ai-orb-glow' : ''}`}>
+                  <Robot size={20} weight="fill" className={orbAnimation === 'thinking' ? 'animate-spin' : ''} />
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.2em]" style={{ color: accent }}>Roviq Ai</div>
+                  <div className="font-display text-base">{businessName}</div>
+                </div>
               </div>
               <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors" aria-label="Close chat" data-testid="close-widget"><X size={20} /></button>
             </div>
@@ -347,7 +380,17 @@ export default function ChatWidget({ businessId, config }) {
           style={{ background: primary }}
           className={`w-14 h-14 rounded-full shadow-lg text-white flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-xl active:scale-95 ${entranceClass} ${showIdleFx && pulseEnabled ? "ai-emp-pulse" : ""} ${showIdleFx ? "ai-emp-float" : ""}`}
         >
-          {open ? <X size={22} weight="bold" /> : <ChatCircleDots size={24} weight="fill" />}
+          {open ? <X size={22} weight="bold" /> : (
+            <div className="relative">
+              <ChatCircleDots size={24} weight="fill" />
+              {/* Premium orb indicator for greeting */}
+              {!reducedMotion && orbAnimation === 'greeting' && (
+                <div className="absolute -top-1 -right-1 ai-orb-wave">
+                  <Sparkles size={12} weight="fill" className="text-yellow-300" />
+                </div>
+              )}
+            </div>
+          )}
         </button>
       </div>
     </div>

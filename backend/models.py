@@ -163,3 +163,59 @@ class Message(BaseModel):
     text: str
     confidence: Optional[float] = None
     created_at: str = Field(default_factory=now_iso)
+
+
+class SupportTicket(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    ticket_id: str = Field(default_factory=lambda: f"tkt_{uuid.uuid4().hex[:12]}")
+    business_id: str
+    owner_user_id: str
+    subject: str
+    description: str
+    priority: str = "medium"  # low | medium | high | critical
+    status: str = "open"  # open | in_progress | resolved | closed
+    category: str = "general"  # general | technical | billing | feature_request
+    admin_response: Optional[str] = None
+    resolved_at: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
+
+class Notification(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    notification_id: str = Field(default_factory=lambda: f"ntf_{uuid.uuid4().hex[:12]}")
+    user_id: Optional[str] = None  # null for broadcast to all
+    business_id: Optional[str] = None
+    target_group: Optional[str] = None  # all | free | paid | specific_business
+    title: str
+    message: str
+    type: str = "info"  # info | warning | announcement | system
+    read: bool = False
+    read_at: Optional[str] = None
+    created_by: Optional[str] = None  # admin user_id
+    created_at: str = Field(default_factory=now_iso)
+
+
+class SalesReferral(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    referral_id: str = Field(default_factory=lambda: f"ref_{uuid.uuid4().hex[:12]}")
+    sales_user_id: str
+    business_id: str
+    commission_rate: float = 0.15  # 15%
+    total_commission_earned: float = 0.0
+    commission_paid: float = 0.0
+    pending_commission: float = 0.0
+    status: str = "active"  # active | paused | completed
+    last_payment_date: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+
+class PasswordResetOTP(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    otp_id: str = Field(default_factory=lambda: f"otp_{uuid.uuid4().hex[:12]}")
+    user_id: str
+    email: str
+    otp_hash: str
+    expires_at: str
+    used: bool = False
+    created_at: str = Field(default_factory=now_iso)

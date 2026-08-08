@@ -148,6 +148,7 @@ ENABLE_SCHEDULER = os.environ.get("ENABLE_SCHEDULER", "true").strip().lower() !=
 # ---------------------------------------------------------------------------
 APP_NAME = os.environ.get("APP_NAME", "roviq-ai").strip()
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip() or None
+SALES_EMAIL = os.environ.get("SALES_EMAIL", "").strip().lower() or None  # Initial sales team member email
 
-logger.info("Config loaded: ENV=%s GEMINI_MODEL=%s S3_STORAGE=%s RAZORPAY=%s REDIS=%s",
-            ENV, GEMINI_MODEL, USE_S3_STORAGE, RAZORPAY_ENABLED, bool(REDIS_URL))
+logger.info("Config loaded: ENV=%s GEMINI_MODEL=%s S3_STORAGE=%s RAZORPAY=%s REDIS=%s SALES=%s",
+            ENV, GEMINI_MODEL, USE_S3_STORAGE, RAZORPAY_ENABLED, bool(REDIS_URL), bool(SALES_EMAIL))
