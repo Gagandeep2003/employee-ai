@@ -56,3 +56,4 @@ black==24.10.0
 isort==5.13.2
 aiohttp==3.11.10
 beautifulsoup4==4.12.3
+rank-bm25==0.2.2
