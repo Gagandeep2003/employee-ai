@@ -8,7 +8,7 @@ retrieval-grounded chat and JSON-action extraction. Override with
 GEMINI_MODEL if you need a stronger model for a specific business.
 """
 import logging
-from typing import List, Optional, AsyncGenerator
+from typing import List, Optional
 
 from google import genai
 from google.genai import types

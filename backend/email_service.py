@@ -7,7 +7,6 @@ Uses HTTP APIs (Resend/Brevo) as primary providers with SMTP as fallback.
 import asyncio
 import logging
 import os
-from email.message import EmailMessage
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 

@@ -199,19 +199,12 @@ async def generate_chat_stream(payload: ChatIn, biz: dict, settings: dict) -> As
             redis_client.set_ai_response(payload.business_id, question_hash, answer)
         
         # Send final event
-        final_data = {
-            'type': 'end',
-            'answer': answer,
-            'confidence': float(top_score),
-            'sources': hits_result['sources'],
-            'unanswered': unanswered,
-            'booking_result': booking_result
-        }
-        yield f"data: {json.dumps(final_data)}\n\n"
-
+        yield f"data: {json.dumps({\n    'type': 'end',\n    'answer': answer,\n    'confidence': float(top_score),\n    'sources': hits_result['sources'],\n    'unanswered': unanswered,\n    'booking_result': booking_result\n})}\n\n"
+        
     except Exception as e:
         logger.error(f"Error in chat stream: {e}")
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
 
 @router.post("")
 @limiter.limit("30/minute")
