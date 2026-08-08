@@ -7,6 +7,7 @@ gemini-3.1-flash-lite: Google's current low-latency, cost-optimized model
 retrieval-grounded chat and JSON-action extraction. Override with
 GEMINI_MODEL if you need a stronger model for a specific business.
 """
+from typing import List, Optional, AsyncGenerator
 import logging
 from typing import List, Optional
 
