@@ -21,7 +21,6 @@ google-genai==0.2.2
 
 # Email
 resend==0.7.0
-brevo-client==1.0.0
 
 # Storage
 boto3==1.35.87
