@@ -44,6 +44,10 @@ import WidgetPage from "./pages/WidgetPage";
 import TalkPage from "./pages/TalkPage";
 import AppShell from "./components/AppShell";
 
+// 1. ADD THESE IMPORTS AT THE TOP
+import SalesLogin from "./pages/SalesLogin";
+import SalesPortal from "./pages/SalesPortal";
+
 function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Loading…</div>;
@@ -56,6 +60,12 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      
+      {/* 2. ADD THESE SALES ROUTES HERE */}
+      <Route path="/sales/login" element={<SalesLogin />} />
+      <Route path="/sales/dashboard" element={<Protected><SalesPortal /></Protected>} />
+      <Route path="/sales" element={<Navigate to="/sales/login" replace />} />
+      
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
@@ -74,38 +84,4 @@ function AppRouter() {
         <Route path="/billing" element={<Billing />} />
         <Route path="/referrals" element={<Referrals />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/security" element={<Security />} />
-      </Route>
-      <Route element={<Protected><AdminShell /></Protected>}>
-        <Route path="/admin" element={<AdminExecutive />} />
-        <Route path="/admin/businesses" element={<AdminBusinesses />} />
-        <Route path="/admin/users" element={<AdminUsers />} />
-        <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
-        <Route path="/admin/ai-usage" element={<AdminAIUsage />} />
-        <Route path="/admin/conversations" element={<AdminConversations />} />
-        <Route path="/admin/knowledge" element={<AdminKnowledge />} />
-        <Route path="/admin/crawls" element={<AdminCrawlers />} />
-        <Route path="/admin/referrals" element={<AdminReferrals />} />
-        <Route path="/admin/coupons" element={<AdminCoupons />} />
-        <Route path="/admin/tickets" element={<AdminTickets />} />
-        <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
-        <Route path="/admin/flags" element={<AdminFlags />} />
-        <Route path="/admin/system" element={<AdminSystem />} />
-        <Route path="/admin/audit" element={<AdminAudit />} />
-        <Route path="/admin/settings" element={<AdminSettings />} />
-        <Route path="/admin/legal" element={<AdminLegal />} />
-      </Route>
-    </Routes>
-  );
-}
-
-export default function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRouter />
-        <Toaster position="top-right" richColors />
-      </BrowserRouter>
-    </AuthProvider>
-  );
-}
+        <Route path="/security" element={<Security
