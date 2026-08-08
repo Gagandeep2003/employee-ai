@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { PaperPlaneRight, X, ChatCircleDots, User, PaperPlaneTilt, Robot, Sparkles } from "@phosphor-icons/react";
+import { PaperPlaneRight, X, ChatCircleDots, User, PaperPlaneTilt, Robot, MagicWand } from "@phosphor-icons/react";
 import { api } from "../lib/api";
 
 // Respectful-but-playful nudges shown in a teaser bubble before the visitor has
@@ -386,7 +386,7 @@ export default function ChatWidget({ businessId, config }) {
               {/* Premium orb indicator for greeting */}
               {!reducedMotion && orbAnimation === 'greeting' && (
                 <div className="absolute -top-1 -right-1 ai-orb-wave">
-                  <Sparkles size={12} weight="fill" className="text-yellow-300" />
+                  <MagicWand size={12} weight="fill" className="text-yellow-300" />
                 </div>
               )}
             </div>
