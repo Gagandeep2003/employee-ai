@@ -4,7 +4,7 @@ import { api, setAuthToken } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { toast } from "sonner";
 import ErrorBoundary from "./ErrorBoundary";
-import { Users, ChatCircleText, BookOpen, ChartLine, PaintBrush, CreditCard, Handshake, GearSix, ShieldCheck, SignOut, Buildings, House, CalendarCheck, EnvelopeSimple, X, Package, Lock } from "@phosphor-icons/react";
+import { Users, ChatCircleText, BookOpen, ChartLine, PaintBrush, CreditCard, Handshake, GearSix, ShieldCheck, SignOut, Buildings, House, CalendarCheck, EnvelopeSimple, X, Package, Lock, Ticket } from "@phosphor-icons/react";
 
 export const BizCtx = createContext({ businesses: [], current: null, setCurrent: () => {} });
 export const useBiz = () => useContext(BizCtx);
@@ -117,6 +117,7 @@ export default function AppShell() {
     { to: "/widget-settings", label: "Widget", Icon: PaintBrush },
     { to: "/billing", label: "Billing", Icon: CreditCard },
     { to: "/referrals", label: "Referrals", Icon: Handshake },
+    { to: "/tickets", label: "Support", Icon: Ticket },
     { to: "/settings", label: "Settings", Icon: GearSix },
     { to: "/security", label: "Security", Icon: Lock },
   ];
