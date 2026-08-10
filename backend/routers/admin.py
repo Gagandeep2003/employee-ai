@@ -8,6 +8,7 @@ from auth import get_current_user, create_token
 from db import db
 from audit import log as audit_log
 from routers.billing import PLANS
+from auth import get_current_admin_user  # Or wherever it is defined
 from retrieval import invalidate
 import config
 from platform_settings import get_plan_limit
