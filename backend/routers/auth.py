@@ -455,4 +455,3 @@ async def get_current_admin_user(current_user: dict = Depends(get_current_user))
     if current_user.get("role") != "admin":
         raise HTTPException(403, "Admin access required")
     return current_user
-
