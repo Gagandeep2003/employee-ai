@@ -450,11 +450,8 @@ def _public_user(user: dict) -> dict:
         "email_verified": bool(user.get("email_verified", False)),
         "mfa_enabled": bool(user.get("mfa_enabled", False)),
     }
-    async def get_current_admin_user(request: Request,
-                                 session_token: Optional[str] = Cookie(None),
-                                 authorization: Optional[str] = Header(None)) -> dict:
+async def get_current_admin_user(current_user: dict = Depends(get_current_user)) -> dict:
     """Requires authenticated user with admin role"""
-    user = await get_current_user(request, session_token, authorization)
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
+    if current_user.get("role") != "admin":
+        raise HTTPException(403, "Admin access required")
+    return current_user
