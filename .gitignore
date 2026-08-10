@@ -1,60 +1,45 @@
-```
+```gitignore
+# Dependencies
+node_modules/
+
+# Build artifacts
+build/
+dist/
+*.js.map
+
+# Editors
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git/
-.mypy_cache/
-.pytest_cache/
-.hypothesis/
 
-# Environment
-.env
-.env.local
-.env.*
-
-# Dependencies
-node_modules/
-target/
-.gradle/
-julia-*/
-zig*/
-
-# Build artifacts
-dist/
-build/
-*.egg-info/
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# System
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
+# Compiled files
+*.o
+*.obj
+*.so
+*.dll
+*.exe
 
 # Coverage
 coverage/
 htmlcov/
 .coverage
+
+# OS
+.DS_Store
+Thumbs.db
 ```
