@@ -861,3 +861,57 @@ async def trigger_plan_snapshot(request: Request, user=Depends(get_current_user)
     result = await plan_snapshot_job()
     await audit_log(request, user["user_id"], "cron.run_plan_snapshot", "system", "plan_snapshot", result)
     return {"ok": True, **result}
+@router.post('/sales/onboard')
+async def onboard_sales_agent(data: dict, current_user=Depends(get_current_admin_user)):
+    """
+    Creates a sales user, generates a temp password, sends email via Resend,
+    and returns the credentials to the admin.
+    """
+    name = data.get('name')
+    email = data.get('email')
+    company = data.get('company')
+    
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="Name and email required")
+
+    # 1. Generate Temp Password
+    temp_password = secrets.token_urlsafe(12)
+    hashed_pw = get_password_hash(temp_password)
+
+    # 2. Create User in DB with role 'sales'
+    try:
+        new_user = db.execute(
+            "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (%s, %s, %s, 'sales', NOW()) RETURNING id",
+            (name, email, hashed_pw)
+        ).fetchone()
+        
+        # 3. Link to Sales Profile (if you have a separate sales_profiles table)
+        # db.execute("INSERT INTO sales_profiles ...") 
+        
+    except Exception as e:
+        if "unique_email" in str(e):
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise e
+
+    # 4. Send Email via Resend (using your existing email service)
+    login_url = f"{FRONTEND_URL}/login" # Or specific sales portal URL
+    
+    await send_email(
+        to=email,
+        subject="Welcome to Roviq Sales Team - Action Required",
+        html=f"""
+        <h1>Welcome {name}!</h1>
+        <p>You have been onboarded as a Sales Agent for {company}.</p>
+        <p><strong>Login URL:</strong> <a href="{login_url}">{login_url}</a></p>
+        <p><strong>Temporary Password:</strong> <code>{temp_password}</code></p>
+        <p>Please log in and change your password immediately.</p>
+        <p>You will earn a 15% commission on every paid plan purchased by businesses you onboard.</p>
+        """
+    )
+
+    return {
+        "message": "User created and email sent",
+        "email": email,
+        "tempPassword": temp_password,
+        "loginUrl": login_url
+    }
