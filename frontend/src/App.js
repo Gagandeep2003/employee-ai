@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./lib/auth";
@@ -18,6 +18,7 @@ import Analytics from "./pages/Analytics";
 import WidgetSettings from "./pages/WidgetSettings";
 import Billing from "./pages/Billing";
 import Referrals from "./pages/Referrals";
+import Tickets from "./pages/Tickets";
 import Settings from "./pages/Settings";
 import Security from "./pages/Security";
 import LegalDocPage from "./pages/LegalDocPage";
@@ -45,6 +46,7 @@ import TalkPage from "./pages/TalkPage";
 import AppShell from "./components/AppShell";
 import SalesLogin from "./pages/SalesLogin";
 import SalesPortal from "./pages/SalesPortal";
+import NotificationCenter from "./pages/NotificationCenter";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -78,6 +80,8 @@ function AppRouter() {
         <Route path="/widget-settings" element={<WidgetSettings />} />
         <Route path="/billing" element={<Billing />} />
         <Route path="/referrals" element={<Referrals />} />
+        <Route path="/tickets" element={<Tickets />} />
+        <Route path="/notifications" element={<NotificationCenter />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/security" element={<Security />} />
       </Route>
